@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canTransition } from "./status-machine";
+import { assertTransition, canTransition } from "./status-machine";
 import { ApplicationStatus } from "./application.schema";
 
 describe("canTransition", () => {
@@ -75,5 +75,38 @@ describe("terminal states cannot transition to anything", () => {
     it(`disallows WITHDRAWN to move to ${target}`, () => {
       expect(canTransition("WITHDRAWN", target)).toBe(false);
     });
+  });
+});
+
+describe("assertTransition", () => {
+  const validCases: [ApplicationStatus, ApplicationStatus][] = [
+    ["APPLIED", "SCREENING"],
+    ["INTERVIEW", "OFFER"],
+    ["OFFER", "ACCEPTED"],
+  ];
+  const invalidCases: [ApplicationStatus, ApplicationStatus][] = [
+    ["APPLIED", "OFFER"],
+    ["APPLIED", "ACCEPTED"],
+    ["APPLIED", "INTERVIEW"],
+    ["SCREENING", "OFFER"],
+    ["SCREENING", "ACCEPTED"],
+    ["INTERVIEW", "ACCEPTED"],
+  ];
+  validCases.forEach(([from, to]) => {
+    it(`${from} → ${to} should NOT throw`, () => {
+      expect(() => assertTransition(from, to)).not.toThrow();
+    });
+  });
+  invalidCases.forEach(([from, to]) => {
+    it(`${from} -> ${to} should throw`, () => {
+      expect(() => assertTransition(from, to)).toThrow();
+    });
+  });
+  it("throws with message containing from and to states", () => {
+    expect(() => assertTransition("REJECTED", "SCREENING")).toThrow("REJECTED");
+
+    expect(() => assertTransition("REJECTED", "SCREENING")).toThrow(
+      "SCREENING",
+    );
   });
 });

@@ -1,0 +1,89 @@
+openapi: 3.1.0
+info:
+  title: Job Tracker API
+  version: 1.0.0
+  description: Track job applications, status transitions, and activity history
+
+servers:
+  - url: http://localhost:3000
+    description: Local development
+
+paths:
+  /auth/register:
+    post:
+      summary: Register a new user
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 100
+                  example: Noor Hassan
+                email:
+                  type: string
+                  format: email
+                  example: noor@example.com
+                password:
+                  type: string
+                  minLength: 8
+                  maxLength: 72
+                  example: supersecret123
+      responses:
+        "201":
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      name:
+                        type: string
+                      email:
+                        type: string
+                      createdAt:
+                        type: string
+                        format: date-time
+                  token:
+                    type: string
+                    description: JWT access token
+        "409":
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+                components:
+                  schemas:
+                    Error:
+                      type: object
+                      required: [error]
+                      properties:
+                        error:
+                          type: object
+                          required: [message, code]
+                          properties:
+                            message:
+                              type: string
+                              example: Email already registered
+                            code:
+                              type: string
+                              example: EMAIL_TAKEN
