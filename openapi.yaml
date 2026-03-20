@@ -12,7 +12,9 @@ paths:
   /auth/register:
     post:
       summary: Register a new user
-      tags: [Auth]
+      tags:
+        - Auth
+
       requestBody:
         required: true
         content:
@@ -23,67 +25,189 @@ paths:
               properties:
                 name:
                   type: string
-                  minLength: 2
-                  maxLength: 100
-                  example: Noor Hassan
                 email:
                   type: string
                   format: email
-                  example: noor@example.com
                 password:
                   type: string
-                  minLength: 8
-                  maxLength: 72
-                  example: supersecret123
+                  format: password
+            examples:
+              validUser:
+                value:
+                  name: Zayn
+                  email: zayn@example.com
+                  password: strongPassword123
+
       responses:
         "201":
-          description: User created successfully
+          description: User registered successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  user:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/User"
+              examples:
+                success:
+                  value:
+                    status_code: 201
+                    success: true
+                    message: User registered
+                    data:
+                      id: user_123
+                      name: Noor ul hassan
+                      email: codewithnuh@gmail.com
+                    meta: null
+                    error: null
+
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validationError:
+                  value:
+                    status_code: 400
+                    success: false
+                    message: Validation failed
+                    data: null
+                    meta: null
+                    error:
+                      code: VALIDATION_ERROR
+                      details:
+                        - field: email
+                          message: Email is required
+
+        "409":
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                conflict:
+                  value:
+                    status_code: 409
+                    success: false
+                    message: User already exists
+                    data: null
+                    meta: null
+                    error:
+                      code: DUPLICATE_RESOURCE
+                      details: Email already registered
+
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                serverError:
+                  value:
+                    status_code: 500
+                    success: false
+                    message: Internal server error
+                    data: null
+                    meta: null
+                    error:
+                      code: SERVER_ERROR
+                      details: Something went wrong
+  /auth/login:
+    post:
+      summary: Login a user
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+         application/json:
+          schema:
+           type: object
+           required: [email,password]
+           properties:
+            email:
+             type: string
+             required: true
+             format: email
+            password:
+             type: string
+             required: true 
+             format: password
+          examples:
+           validUser:
+            values:
+             email: codewithnuh@codewithnuh.com
+             password: password.123
+              
+components:
+  schemas:
+
+    # 🔥 Generic Success Wrapper
+    SuccessResponse:
+      type: object
+      properties:
+        status_code:
+          type: integer
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          nullable: true
+          description: Dynamic per endpoint
+        meta:
+          type: object
+          nullable: true
+        error:
+          type: object
+          nullable: true
+
+    # 🔥 Reusable Error Wrapper
+    ErrorResponse:
+      type: object
+      properties:
+        status_code:
+          type: integer
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          nullable: true
+        meta:
+          type: object
+          nullable: true
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            details:
+              oneOf:
+                - type: string
+                - type: array
+                  items:
                     type: object
                     properties:
-                      id:
+                      field:
                         type: string
-                        format: uuid
-                      name:
+                      message:
                         type: string
-                      email:
-                        type: string
-                      createdAt:
-                        type: string
-                        format: date-time
-                  token:
-                    type: string
-                    description: JWT access token
-        "409":
-          description: Email already registered
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "422":
-          description: Validation failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-                components:
-                  schemas:
-                    Error:
-                      type: object
-                      required: [error]
-                      properties:
-                        error:
-                          type: object
-                          required: [message, code]
-                          properties:
-                            message:
-                              type: string
-                              example: Email already registered
-                            code:
-                              type: string
-                              example: EMAIL_TAKEN
+
+    # 🔥 User Schema (separate, reusable)
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
