@@ -9,12 +9,11 @@ servers:
     description: Local development
 
 paths:
-  /auth/register:
+  /v1/auth/register:
     post:
       summary: Register a new user
       tags:
         - Auth
-
       requestBody:
         required: true
         content:
@@ -37,7 +36,6 @@ paths:
                   name: Zayn
                   email: zayn@example.com
                   password: strongPassword123
-
       responses:
         "201":
           description: User registered successfully
@@ -62,63 +60,18 @@ paths:
                       email: codewithnuh@gmail.com
                     meta: null
                     error: null
-
         "400":
-          description: Validation error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                validationError:
-                  value:
-                    status_code: 400
-                    success: false
-                    message: Validation failed
-                    data: null
-                    meta: null
-                    error:
-                      code: VALIDATION_ERROR
-                      details:
-                        - field: email
-                          message: Email is required
-
+          $ref: "#/components/responses/BadRequest"
         "409":
           description: User already exists
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                conflict:
-                  value:
-                    status_code: 409
-                    success: false
-                    message: User already exists
-                    data: null
-                    meta: null
-                    error:
-                      code: DUPLICATE_RESOURCE
-                      details: Email already registered
-
         "500":
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                serverError:
-                  value:
-                    status_code: 500
-                    success: false
-                    message: Internal server error
-                    data: null
-                    meta: null
-                    error:
-                      code: SERVER_ERROR
-                      details: Something went wrong
-  /auth/login:
+          $ref: "#/components/responses/InternalError"
+
+  /v1/auth/login:
     post:
       summary: Login a user
       tags:
@@ -126,29 +79,421 @@ paths:
       requestBody:
         required: true
         content:
-         application/json:
-          schema:
-           type: object
-           required: [email,password]
-           properties:
-            email:
-             type: string
-             required: true
-             format: email
-            password:
-             type: string
-             required: true 
-             format: password
-          examples:
-           validUser:
-            values:
-             email: codewithnuh@codewithnuh.com
-             password: password.123
-              
-components:
-  schemas:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+            examples:
+              validUser:
+                value:
+                  email: codewithnuh@codewithnuh.com
+                  password: password.123
+      responses:
+        "200":
+          description: Login successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          token:
+                            type: string
+                          user:
+                            $ref: "#/components/schemas/User"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
-    # 🔥 Generic Success Wrapper
+  /v1/auth/me:
+    get:
+      summary: Get your Info
+      tags:
+        - Auth
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Successfully Get Current LoggedIn User
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          user:
+                            $ref: "#/components/schemas/User"
+        "404":
+          description: Not found Current LoggedIn User
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/applications:
+    post:
+      summary: Create a new job application
+      description: Creates a new job application for the authenticated user
+      tags:
+        - Applications
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - companyName
+                - roleTitle
+              properties:
+                companyName:
+                  type: string
+                  example: Google
+                roleTitle:
+                  type: string
+                  example: Frontend Engineer
+                status:
+                  type: string
+                  enum: [APPLIED, INTERVIEW, OFFER, REJECTED]
+                  default: APPLIED
+                location:
+                  type: string
+                  example: Remote
+                jobUrl:
+                  type: string
+                  format: uri
+                  example: https://careers.google.com/jobs/123
+                salaryMin:
+                  type: integer
+                  example: 100000
+                salaryMax:
+                  type: integer
+                  example: 150000
+                notes:
+                  type: string
+                  example: Referred by a friend
+      responses:
+        "201":
+          description: Application created successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Application"
+        "401":
+          description: Unauthorized
+    get:
+      summary: List all job applications
+      description: Retrieve a paginated list of job applications with optional filters.
+      tags:
+        - Applications
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter by application status
+          required: false
+          schema:
+            type: string
+            enum: [APPLIED, INTERVIEW, OFFER, REJECTED]
+        - name: companyName
+          in: query
+          description: Search by company name (case-insensitive)
+          required: false
+          schema:
+            type: string
+        - name: location
+          in: query
+          description: Filter by job location
+          required: false
+          schema:
+            type: string
+        - name: page
+          in: query
+          description: Page number for pagination
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          required: false
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: A list of job applications
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Application"
+                      meta:
+                        type: object
+                        properties:
+                          totalItems:
+                            type: integer
+                          totalPages:
+                            type: integer
+                          currentPage:
+                            type: integer
+                          itemsPerPage:
+                            type: integer
+              examples:
+                listSuccess:
+                  value:
+                    status_code: 200
+                    success: true
+                    message: Applications retrieved successfully
+                    data:
+                      - id: "uuid-1"
+                        userId: "user-123"
+                        companyName: "Google"
+                        roleTitle: "Frontend Engineer"
+                        status: "INTERVIEW"
+                        location: "Remote"
+                        appliedAt: "2026-03-21T10:00:00Z"
+                    meta:
+                      totalItems: 1
+                      totalPages: 1
+                      currentPage: 1
+                      itemsPerPage: 10
+        "401":
+          description: Unauthorized
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /v1/applications/{id}:
+    get:
+      summary: Get a specific job application
+      description: Retrieve detailed information about a single job application by its ID.
+      tags:
+        - Applications
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The unique identifier (UUID) of the application
+          schema:
+            type: string
+            format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        "200":
+          description: Application found
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Application"
+              examples:
+                found:
+                  value:
+                    status_code: 200
+                    success: true
+                    message: Application retrieved
+                    data:
+                      id: "550e8400-e29b-41d4-a716-446655440000"
+                      userId: "user_123"
+                      companyName: "Meta"
+                      roleTitle: "Product Designer"
+                      status: "OFFER"
+                      location: "London, UK"
+                      appliedAt: "2026-03-20T14:30:00Z"
+                      createdAt: "2026-03-20T14:30:00Z"
+                      updatedAt: "2026-03-21T09:00:00Z"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden (The application belongs to another user)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Application not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      summary: Delete an application
+      tags:
+        - Applications
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Application deleted successfully
+
+  # 1. Update Status (PATCH)
+  /v1/applications/{id}/status:
+    patch:
+      summary: Update application status
+      description: Transitions an application to a new status and creates an activity log entry.
+      tags:
+        - Applications
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  $ref: "#/components/schemas/ApplicationStatus"
+                note:
+                  type: string
+                  description: Optional note for the status change
+      responses:
+        "200":
+          description: Status updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+ 
+  # 3. Get Activity Log (GET)
+  /v1/applications/{id}/activity:
+    get:
+      summary: Get application activity history
+      tags:
+        - Applications
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Activity logs retrieved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/ActivityLog"
+
+  # 4. Aggregated Summary (GET)
+  /v1/stats:
+    get:
+      summary: Get job hunt statistics
+      description: Returns counts of applications grouped by status for the current user.
+      tags:
+        - Stats
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Statistics retrieved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          totalApplications:
+                            type: integer
+                          byStatus:
+                            type: object
+                            additionalProperties:
+                              type: integer
+                            example:
+                              APPLIED: 12
+                              INTERVIEW: 3
+                              REJECTED: 5
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    BadRequest:
+      description: Missing required fields or invalid format
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
     SuccessResponse:
       type: object
       properties:
@@ -160,7 +505,6 @@ components:
           type: string
         data:
           nullable: true
-          description: Dynamic per endpoint
         meta:
           type: object
           nullable: true
@@ -168,7 +512,6 @@ components:
           type: object
           nullable: true
 
-    # 🔥 Reusable Error Wrapper
     ErrorResponse:
       type: object
       properties:
@@ -201,7 +544,6 @@ components:
                       message:
                         type: string
 
-    # 🔥 User Schema (separate, reusable)
     User:
       type: object
       properties:
@@ -211,3 +553,68 @@ components:
           type: string
         email:
           type: string
+        createdAt:
+          type: string
+          format: date-time
+    Application:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        companyName:
+          type: string
+        roleTitle:
+          type: string
+        status:
+          type: string
+          enum: [APPLIED, INTERVIEW, OFFER, REJECTED,ACCEPTED,SCREENING,WITHDRAWN]
+        location:
+          type: string
+          nullable: true
+        jobUrl:
+          type: string
+          nullable: true
+        salaryMin:
+          type: integer
+          nullable: true
+        salaryMax:
+          type: integer
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        appliedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ApplicationStatus:
+      type: string
+      enum: [APPLIED, SCREENING, INTERVIEW, OFFER, ACCEPTED, REJECTED, WITHDRAWN]
+
+    ActivityLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        applicationId:
+          type: string
+          format: uuid
+        fromStatus:
+          $ref: "#/components/schemas/ApplicationStatus"
+          nullable: true
+        toStatus:
+          $ref: "#/components/schemas/ApplicationStatus"
+        note:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time      
