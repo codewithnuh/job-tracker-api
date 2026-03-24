@@ -1,5 +1,5 @@
 import { db } from "../../db";
-import { userLoginType, userSchema, userType } from "../../schemas/schema";
+import { userSchema, userType } from "../../schemas/schema";
 import { users } from "../../db/schema";
 import bcrypt from "bcrypt";
 import { eq } from "drizzle-orm";
@@ -7,21 +7,22 @@ import { eq } from "drizzle-orm";
 import {
   ConflictError,
   InternalServerError,
-  NotFoundError,
   UnauthorizedError,
 } from "../../utils/errors/http.errors";
+import { generateToken } from "../../utils/auth/token";
 class UserService {
   async registerUser(input: userType) {
     const validatedData = userSchema.parse(input);
-    // if(!validatedData) throw new ValidationError([{}])
-    const isExistingUser = await db
+    const [existingUser] = await db
       .select()
       .from(users)
       .where(eq(users.email, validatedData.email))
       .limit(1);
-    if (isExistingUser.length > 0) {
+
+    if (existingUser) {
       throw new ConflictError("User already exists");
     }
+
     const SALT_ROUNDS = 10;
     const hashedPassword = await bcrypt.hash(
       validatedData.password,
@@ -36,32 +37,57 @@ class UserService {
         passwordHash: hashedPassword,
       })
       .returning();
+
     if (!newUser) throw new InternalServerError("Failed to register user");
+
+    const token = await generateToken({
+      id: newUser.id,
+      email: newUser.email,
+    });
+
     return {
       user: {
-        id: newUser?.id,
-        email: newUser?.email,
-        name: newUser?.name,
-        createdAt: newUser?.createdAt,
+        id: newUser.id,
+        email: newUser.email,
+        name: newUser.name,
+        createdAt: newUser.createdAt,
       },
+      token,
     };
   }
-  async loginUser(input: userLoginType) {
+
+  async loginUser(input: userType) {
     const validatedData = userSchema.parse(input);
     const user = await db.query.users.findFirst({
       where: eq(users.email, validatedData.email),
     });
-    if (!user) throw new UnauthorizedError("Wrong Credentials");
-    const password = await bcrypt.compare(
+
+    if (!user) {
+      throw new UnauthorizedError("Invalid credentials");
+    }
+
+    const isPasswordValid = await bcrypt.compare(
       validatedData.password,
       user.passwordHash,
     );
-    if (!password) throw new UnauthorizedError("Wrong Credentials");
+
+    if (!isPasswordValid) {
+      throw new UnauthorizedError("Invalid credentials");
+    }
+
+    const token = await generateToken({
+      id: user.id,
+      email: user.email,
+    });
+
     return {
       user: {
         id: user.id,
+        name: user.name,
         email: user.email,
+        createdAt: user.createdAt,
       },
+      token,
     };
   }
 }

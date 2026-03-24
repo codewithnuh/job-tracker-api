@@ -7,4 +7,3 @@ export const userSchema = z.object({
 });
 
 export type userType = z.infer<typeof userSchema>;
-export type userLoginType = Omit<userType, "name">;

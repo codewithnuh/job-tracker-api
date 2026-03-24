@@ -1,8 +1,12 @@
+import { ZodError } from "zod";
 import { AppError } from "./base.error";
 import { NormalizedError, ErrorDetails } from "./error.types";
 
+/**
+ * Normalizes an unknown error into a consistent structure for logging and responses.
+ */
 export function normalizeError(err: unknown): NormalizedError {
-  // ✅ Our own errors
+  // ✅ 1. Standard HTTP errors (Conflicts, Unauthorized, etc.)
   if (err instanceof AppError) {
     return {
       message: err.message,
@@ -12,17 +16,31 @@ export function normalizeError(err: unknown): NormalizedError {
     };
   }
 
-  // ✅ Native JS errors
-  if (err instanceof Error) {
+  // ✅ 2. Validation Errors (ZodError)
+  if (err instanceof ZodError) {
+    const details = err.issues.map((issue) => ({
+      field: issue.path.join(".") || "body",
+      message: issue.message,
+    }));
+
     return {
-      message: err.message,
-      code: "INTERNAL_SERVER_ERROR",
-      statusCode: 500,
-      details: err.message,
+      message: "Validation failed", // Generic message for the client
+      code: "VALIDATION_ERROR",
+      statusCode: 400,
+      details, // specific field errors for the logger
     };
   }
 
-  // ✅ Unknown (non-error)
+  // ✅ 3. Native JS errors (Masking internal details)
+  if (err instanceof Error) {
+    return {
+      message: "An internal server error occurred",
+      code: (err as any).code || "INTERNAL_SERVER_ERROR",
+      statusCode: 500,
+      details: err.message, // Full message and stack info for the logger
+    };
+  }
+
   return {
     message: "Unknown error",
     code: "UNKNOWN_ERROR",
