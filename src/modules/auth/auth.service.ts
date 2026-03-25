@@ -3,10 +3,11 @@ import { userSchema, userType } from "../../schemas/schema";
 import { users } from "../../db/schema";
 import bcrypt from "bcrypt";
 import { eq } from "drizzle-orm";
-
+import z from "zod";
 import {
   ConflictError,
   InternalServerError,
+  NotFoundError,
   UnauthorizedError,
 } from "../../utils/errors/http.errors";
 import { generateToken } from "../../utils/auth/token";
@@ -88,6 +89,24 @@ class UserService {
         createdAt: user.createdAt,
       },
       token,
+    };
+  }
+  async getUserByEmail(email: string) {
+    const validEmail = z.email().parse(email);
+    if (!email) throw new NotFoundError("User not found");
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, validEmail))
+      .limit(1);
+    if (!user) throw new NotFoundError("User not found");
+    return {
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        createdAt: user.createdAt,
+      },
     };
   }
 }
