@@ -10,7 +10,8 @@ import {
   NotFoundError,
   UnauthorizedError,
 } from "../../utils/errors/http.errors";
-import { generateToken } from "../../utils/auth/token";
+import { generateToken, verifyToken } from "../../utils/auth/token";
+import { JWTPayload } from "jose";
 class UserService {
   async registerUser(input: userType) {
     const validatedData = userSchema.parse(input);
@@ -89,6 +90,56 @@ class UserService {
         createdAt: user.createdAt,
       },
       token,
+    };
+  }
+  async logoutUser(token: string) {
+    // Verify token is valid before allowing logout
+    // This prevents abuse where someone tries to "logout" with garbage tokens
+    try {
+      await verifyToken(token);
+    } catch {
+      // Token is already invalid/expired — logout is effectively a no-op
+      // Still return success to avoid leaking token validity status
+      return { success: true, message: "Logged out successfully" };
+    }
+
+    // Stateless JWTs can't be "revoked" without a blacklist.
+    // If you need immediate invalidation, add a Redis-backed token denylist here:
+    // await redis.setex(`revoked:${jti}`, ttl, '1');
+
+    return { success: true, message: "Logged out successfully" };
+  }
+  async getCurrentUser(token: string) {
+    let payload: JWTPayload | null;
+
+    try {
+      payload = await verifyToken(token);
+    } catch {
+      throw new UnauthorizedError("Invalid or expired token");
+    }
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, (payload as any).id),
+      columns: {
+        id: true,
+        email: true,
+        name: true,
+        createdAt: true,
+        passwordHash: false, // explicitly exclude
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundError("User not found");
+    }
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        createdAt: user.createdAt,
+      },
     };
   }
   async getUserByEmail(email: string) {

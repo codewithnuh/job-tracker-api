@@ -7,8 +7,7 @@ export async function authRoutes(fastify: FastifyInstance) {
     "/v1/auth/register",
     authController.register,
   );
-  fastify.post<{ Body: userType }>(
-    "/v1/auth/login",
-    authController.login,
-  );
+  fastify.post<{ Body: userType }>("/v1/auth/login", authController.login);
+  fastify.get("/v1/auth/me", authController.getCurrentUser);
+  fastify.delete("/v1/auth/logout", authController.logout);
 }

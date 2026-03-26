@@ -3,6 +3,7 @@ import { userService } from "./auth.service";
 import { userType } from "../../schemas/schema";
 import { verifyToken } from "../../utils/auth/token";
 import { createSuccessResponse } from "../../lib/response";
+import { UnauthorizedError } from "../../utils/errors/http.errors";
 
 class AuthController {
   async register(
@@ -22,7 +23,7 @@ class AuthController {
       })
       .send(
         createSuccessResponse({
-          data: { user: result.user }, // Nested for consistency
+          data: { user: result.user },
           message: "User Registered Successfully",
           status_code: 201,
         }),
@@ -38,11 +39,11 @@ class AuthController {
 
     if (existingToken) {
       const decoded = await verifyToken(existingToken);
-      if (decoded && decoded.email === email) {
-        const user = await userService.getUserByEmail(email);
+      if (decoded?.email === email) {
+        const result = await userService.getUserByEmail(email);
         return reply.status(200).send(
           createSuccessResponse({
-            data: { user }, // Standardized
+            data: { user: result.user },
             message: "Session is already active.",
           }),
         );
@@ -67,8 +68,50 @@ class AuthController {
         }),
       );
   }
+  async logout(request: FastifyRequest, reply: FastifyReply) {
+    const token = request.cookies?.token;
+
+    // Optional: validate token before clearing (prevents abuse)
+    if (token) {
+      await userService.logoutUser(token);
+    }
+
+    return reply
+      .clearCookie("token", {
+        path: "/",
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+      })
+      .status(200)
+      .send(
+        createSuccessResponse({
+          message: "Logged out successfully",
+        }),
+      );
+  }
+  async getCurrentUser(request: FastifyRequest, reply: FastifyReply) {
+    const token = request.cookies?.token;
+
+    if (!token) {
+      throw new UnauthorizedError("No authentication token provided");
+    }
+
+    const result = await userService.getCurrentUser(token);
+
+    return reply.status(200).send(
+      createSuccessResponse({
+        data: { user: result.user },
+        message: "User retrieved successfully",
+      }),
+    );
+  }
 }
+
 export const authController = new AuthController();
+
 // Bind methods to prevent 'this' issues with fastify
 authController.register = authController.register.bind(authController);
 authController.login = authController.login.bind(authController);
+authController.getCurrentUser =
+  authController.getCurrentUser.bind(authController);
