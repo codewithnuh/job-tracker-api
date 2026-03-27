@@ -3,6 +3,7 @@ import "dotenv/config";
 import { registerErrorHandler } from "./plugins/error-handler";
 import { authRoutes } from "./modules/auth/auth.routes";
 import fastifyCookie from "@fastify/cookie";
+import { authMiddleware } from "./middleware/auth.middleware";
 const fastify = Fastify({
   logger: {
     level: "info",
@@ -26,7 +27,16 @@ fastify.register(authRoutes);
 fastify.get("/health", async () => {
   return { status: "OK" };
 });
-
+fastify.get(
+  "/v1/protected-route",
+  { preHandler: [authMiddleware] },
+  async (request, reply) => {
+    return {
+      message: "You are in!",
+      currentUser: request.user, // Fully typed!
+    };
+  },
+);
 const PORT = Number(process.env.PORT) || 3000;
 
 // Run the server!
