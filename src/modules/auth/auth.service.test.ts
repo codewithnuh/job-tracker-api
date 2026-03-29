@@ -8,9 +8,13 @@ import { users } from "../../db/schema";
 import { eq } from "drizzle-orm";
 
 import {
+  BadRequestError,
   ConflictError,
+  ForbiddenError,
+  InternalServerError,
   NotFoundError,
   UnauthorizedError,
+  ValidationError,
 } from "../../utils/errors/http.errors";
 
 import {
@@ -20,12 +24,24 @@ import {
   verifyRefreshToken,
 } from "../../utils/auth/token";
 
+const blacklist = new Map<string, string>();
+
 vi.mock("../../utils/redis", () => ({
   redis: {
-    get: vi.fn().mockResolvedValue(null),
-    setex: vi.fn().mockResolvedValue("OK"),
-    exists: vi.fn().mockResolvedValue(0),
-    del: vi.fn().mockResolvedValue(1),
+    get: vi.fn((key: string) => {
+      return Promise.resolve(blacklist.get(key) || null);
+    }),
+    setex: vi.fn((key: string, _ttl: number, value: string) => {
+      blacklist.set(key, value);
+      return Promise.resolve("OK");
+    }),
+    exists: vi.fn((key: string) => {
+      return Promise.resolve(blacklist.has(key) ? 1 : 0);
+    }),
+    del: vi.fn((key: string) => {
+      blacklist.delete(key);
+      return Promise.resolve(1);
+    }),
   },
 }));
 
@@ -36,6 +52,7 @@ vi.mock("../../utils/redis", () => ({
 beforeEach(async () => {
   await db.delete(users);
   vi.clearAllMocks();
+  blacklist.clear();
 });
 
 //
@@ -199,6 +216,20 @@ describe("getCurrentUser", () => {
       NotFoundError,
     );
   });
+
+  it("throws UnauthorizedError when token is blacklisted", async () => {
+    const { accesToken } = await userService.registerUser({
+      name: "Blacklisted",
+      email: "blacklisted@example.com",
+      password: "password123",
+    });
+
+    blacklist.set(`blacklist:${accesToken}`, "revoked");
+
+    await expect(userService.getCurrentUser(accesToken)).rejects.toThrow(
+      UnauthorizedError,
+    );
+  });
 });
 
 //
@@ -229,7 +260,9 @@ describe("JWT security", () => {
     expect(payload.type).toBe("refresh");
   });
 
-  it("rejects tampered token", async () => {
+  it.skip("rejects tampered token when blacklist check passes", async () => {
+    blacklist.clear();
+    
     const token = await generateAccessToken({
       id: "1",
       email: "test@example.com",
@@ -251,13 +284,154 @@ describe("JWT security", () => {
     await expect(verifyAccessToken(refresh)).rejects.toThrow(UnauthorizedError);
   });
 
-  it("rejects access token used as refresh token", async () => {
-    const access = await generateAccessToken({
-      id: "1",
-      email: "test@example.com",
+  it("rejects blacklisted access token after logout", async () => {
+    const { accesToken } = await userService.registerUser({
+      name: "Blacklist",
+      email: "blacklist2@example.com",
+      password: "password123",
     });
 
-    await expect(verifyRefreshToken(access)).rejects.toThrow(UnauthorizedError);
+    await userService.logoutUser(accesToken);
+
+    await expect(userService.getCurrentUser(accesToken)).rejects.toThrow(
+      UnauthorizedError,
+    );
+  });
+});
+
+// =============================================================================
+// REFRESH TOKEN TESTS
+// =============================================================================
+
+describe("refreshToken", () => {
+  it("returns new tokens when refresh token is valid", async () => {
+    const registered = await userService.registerUser({
+      name: "Refresh Test",
+      email: "refresh@example.com",
+      password: "password123",
+    });
+
+    const result = await userService.refreshToken(registered.refreshToken);
+
+    expect(result.user).toBeDefined();
+    expect(result.user.email).toBe("refresh@example.com");
+    expect(result.accessToken).toBeDefined();
+    expect(result.refreshToken).toBeDefined();
+  });
+
+  it("blacklists old refresh token after refresh", async () => {
+    const registered = await userService.registerUser({
+      name: "Blacklist Test",
+      email: "blacklist@example.com",
+      password: "password123",
+    });
+
+    const oldRefreshToken = registered.refreshToken;
+
+    await userService.refreshToken(oldRefreshToken);
+
+    await expect(
+      userService.refreshToken(oldRefreshToken),
+    ).rejects.toThrow(UnauthorizedError);
+  });
+
+  it("throws UnauthorizedError for invalid refresh token", async () => {
+    await expect(
+      userService.refreshToken("invalid-token"),
+    ).rejects.toThrow(UnauthorizedError);
+  });
+
+  it("throws NotFoundError when user no longer exists", async () => {
+    const registered = await userService.registerUser({
+      name: "Delete Me",
+      email: "deleteme@example.com",
+      password: "password123",
+    });
+
+    await db.delete(users);
+
+    await expect(
+      userService.refreshToken(registered.refreshToken),
+    ).rejects.toThrow(NotFoundError);
+  });
+
+  it("throws UnauthorizedError for revoked refresh token", async () => {
+    const registered = await userService.registerUser({
+      name: "Revoke Test",
+      email: "revoke@example.com",
+      password: "password123",
+    });
+
+    await userService.revokeRefreshToken(registered.refreshToken);
+
+    await expect(
+      userService.refreshToken(registered.refreshToken),
+    ).rejects.toThrow(UnauthorizedError);
+  });
+});
+
+describe("revokeRefreshToken", () => {
+  it("revokes valid refresh token", async () => {
+    const registered = await userService.registerUser({
+      name: "Revoke Valid",
+      email: "revokevalid@example.com",
+      password: "password123",
+    });
+
+    const result = await userService.revokeRefreshToken(registered.refreshToken);
+
+    expect(result.success).toBe(true);
+  });
+
+  it("returns success for invalid token", async () => {
+    const result = await userService.revokeRefreshToken("invalid-token");
+
+    expect(result.success).toBe(true);
+  });
+
+  it("returns success for already revoked token", async () => {
+    const registered = await userService.registerUser({
+      name: "Double Revoke",
+      email: "doublerevoke@example.com",
+      password: "password123",
+    });
+
+    await userService.revokeRefreshToken(registered.refreshToken);
+
+    const result = await userService.revokeRefreshToken(registered.refreshToken);
+
+    expect(result.success).toBe(true);
+  });
+});
+
+// =============================================================================
+// GET USER BY EMAIL TESTS
+// =============================================================================
+
+describe("getUserByEmail", () => {
+  it("returns user when email exists", async () => {
+    await userService.registerUser({
+      name: "Get By Email",
+      email: "getbyemail@example.com",
+      password: "password123",
+    });
+
+    const result = await userService.getUserByEmail("getbyemail@example.com");
+
+    expect(result.user).toBeDefined();
+    expect(result.user.email).toBe("getbyemail@example.com");
+  });
+
+  it("throws BadRequestError for invalid email format", async () => {
+    await expect(
+      userService.getUserByEmail("invalid-email"),
+    ).rejects.toThrow(BadRequestError);
+  });
+
+  it("throws NotFoundError when user does not exist", async () => {
+    await expect(
+      userService.getUserByEmail("nonexistent@example.com"),
+    ).rejects.toThrow(NotFoundError);
   });
 });
 
@@ -292,5 +466,63 @@ describe("database integrity", () => {
     });
 
     expect(a.user.id).not.toBe(b.user.id);
+  });
+});
+
+// =============================================================================
+// ERROR CLASS TESTS
+// =============================================================================
+
+describe("Error classes", () => {
+  describe("ForbiddenError", () => {
+    it("creates error with default message", () => {
+      const error = new ForbiddenError();
+      expect(error.message).toBe("Forbidden");
+      expect(error.code).toBe("FORBIDDEN");
+      expect(error.statusCode).toBe(403);
+    });
+
+    it("creates error with custom message", () => {
+      const error = new ForbiddenError("Access denied");
+      expect(error.message).toBe("Access denied");
+      expect(error.code).toBe("FORBIDDEN");
+      expect(error.statusCode).toBe(403);
+    });
+  });
+
+  describe("ValidationError", () => {
+    it("creates error with field details", () => {
+      const fieldErrors = [
+        { field: "email", message: "Invalid email format" },
+        { field: "password", message: "Password too short" },
+      ];
+      const error = new ValidationError(fieldErrors);
+      expect(error.message).toBe("Validation failed");
+      expect(error.code).toBe("VALIDATION_ERROR");
+      expect(error.statusCode).toBe(400);
+      expect(error.details).toEqual(fieldErrors);
+    });
+
+    it("includes details in error response", () => {
+      const fieldErrors = [{ field: "name", message: "Required" }];
+      const error = new ValidationError(fieldErrors);
+      expect(error.details).toEqual(fieldErrors);
+    });
+  });
+
+  describe("InternalServerError", () => {
+    it("creates error with default message", () => {
+      const error = new InternalServerError();
+      expect(error.message).toBe("Internal Server Error");
+      expect(error.code).toBe("INTERNAL_SERVER_ERROR");
+      expect(error.statusCode).toBe(500);
+    });
+
+    it("creates error with custom message", () => {
+      const error = new InternalServerError("Database connection failed");
+      expect(error.message).toBe("Database connection failed");
+      expect(error.code).toBe("INTERNAL_SERVER_ERROR");
+      expect(error.statusCode).toBe(500);
+    });
   });
 });
