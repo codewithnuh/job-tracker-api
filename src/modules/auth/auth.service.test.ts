@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
 import { userService } from "./auth.service";
 
@@ -20,12 +20,22 @@ import {
   verifyRefreshToken,
 } from "../../utils/auth/token";
 
+vi.mock("../../utils/redis", () => ({
+  redis: {
+    get: vi.fn().mockResolvedValue(null),
+    setex: vi.fn().mockResolvedValue("OK"),
+    exists: vi.fn().mockResolvedValue(0),
+    del: vi.fn().mockResolvedValue(1),
+  },
+}));
+
 //
-// CLEAN DATABASE BEFORE EACH TEST
+// CLEAN DATABASE AND MOCKS BEFORE EACH TEST
 //
 
 beforeEach(async () => {
   await db.delete(users);
+  vi.clearAllMocks();
 });
 
 //
@@ -67,14 +77,14 @@ describe("registerUser", () => {
 
   it("rejects duplicate email", async () => {
     await userService.registerUser({
-      name: "User",
+      name: "First User",
       email: "dup@example.com",
       password: "password123",
     });
 
     await expect(
       userService.registerUser({
-        name: "User",
+        name: "Second User",
         email: "dup@example.com",
         password: "password123",
       }),
@@ -258,7 +268,7 @@ describe("JWT security", () => {
 describe("database integrity", () => {
   it("stores exactly one user", async () => {
     await userService.registerUser({
-      name: "User",
+      name: "Single User",
       email: "user@example.com",
       password: "password123",
     });
@@ -270,13 +280,13 @@ describe("database integrity", () => {
 
   it("creates unique ids", async () => {
     const a = await userService.registerUser({
-      name: "A",
+      name: "User Alpha",
       email: "a@example.com",
       password: "password123",
     });
 
     const b = await userService.registerUser({
-      name: "B",
+      name: "User Beta",
       email: "b@example.com",
       password: "password123",
     });

@@ -12,3 +12,4 @@ export const loginSchema = z.object({
 
 export type loginType = z.infer<typeof loginSchema>;
 export type registrationType = z.infer<typeof registrationSchema>;
+export type userType = registrationType;

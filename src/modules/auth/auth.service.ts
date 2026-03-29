@@ -26,7 +26,7 @@ import {
 
 // Define a strict interface for your token payload
 interface CustomJWTPayload {
-  id: string;
+  sub: string;
   email: string;
 }
 
@@ -178,13 +178,12 @@ class UserService {
     }
 
     const user = await db.query.users.findFirst({
-      where: eq(users.id, payload.id),
+      where: eq(users.id, payload.sub),
       columns: {
         id: true,
         email: true,
         name: true,
         createdAt: true,
-        // passwordHash is explicitly omitted
       },
     });
 
@@ -196,7 +195,6 @@ class UserService {
   }
 
   async getUserByEmail(email: string) {
-    // Wrap Zod parsing to return a clean 400 error instead of a 500
     const emailResult = z.string().email().safeParse(email);
     if (!emailResult.success) {
       throw new BadRequestError("Invalid email format.");
@@ -215,6 +213,73 @@ class UserService {
 
     if (!user) throw new NotFoundError("User not found.");
     return { user };
+  }
+
+  async refreshToken(refreshToken: string) {
+    const payload = await verifyRefreshToken(refreshToken);
+
+    const isRevoked = await redis.get(`refresh_blacklist:${payload.jti}`);
+    if (isRevoked) {
+      throw new UnauthorizedError("Session has been revoked. Please login again.");
+    }
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, payload.sub),
+      columns: {
+        id: true,
+        email: true,
+        name: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundError("User account no longer exists.");
+    }
+
+    if (payload.jti) {
+      await redis.setex(`refresh_blacklist:${payload.jti}`, 604800, "revoked");
+    }
+
+    const newAccessToken = await generateAccessToken({
+      id: user.id,
+      email: user.email,
+    });
+    const newRefreshToken = await generateRefreshToken({
+      id: user.id,
+      email: user.email,
+    });
+
+      return {
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        createdAt: user.createdAt,
+      },
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+    };
+  }
+
+  async revokeRefreshToken(refreshToken: string) {
+    try {
+      const payload = await verifyRefreshToken(refreshToken);
+
+      if (!payload.jti) {
+        return { success: true };
+      }
+
+      const timeLeft = payload.exp ? payload.exp - Math.floor(Date.now() / 1000) : 604800;
+
+      if (timeLeft > 0) {
+        await redis.setex(`refresh_blacklist:${payload.jti}`, Math.min(timeLeft, 604800), "revoked");
+      }
+    } catch {
+      // token invalid, nothing to revoke
+    }
+
+    return { success: true };
   }
 }
 
