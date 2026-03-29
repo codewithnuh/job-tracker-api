@@ -1,5 +1,10 @@
 import { db } from "../../db";
-import { userSchema, userType } from "../../schemas/schema";
+import {
+  loginSchema,
+  loginType,
+  registrationSchema,
+  registrationType,
+} from "../../schemas/schema";
 import { users } from "../../db/schema";
 import bcrypt from "bcrypt";
 import { eq } from "drizzle-orm";
@@ -12,7 +17,12 @@ import {
   UnauthorizedError,
   BadRequestError,
 } from "../../utils/errors/http.errors";
-import { generateToken, verifyToken } from "../../utils/auth/token";
+import {
+  generateAccessToken,
+  generateRefreshToken,
+  verifyAccessToken,
+  verifyRefreshToken,
+} from "../../utils/auth/token";
 
 // Define a strict interface for your token payload
 interface CustomJWTPayload {
@@ -26,13 +36,13 @@ class UserService {
    * Uses generic error messaging to prevent user enumeration.
    * Increased SALT_ROUNDS for better brute-force resistance.
    */
-  async registerUser(input: userType) {
-    const validatedData = userSchema.parse(input);
-
+  async registerUser(input: registrationType) {
+    const validatedData = registrationSchema.parse(input);
+    const normalizedEmail = validatedData.email.toLowerCase().trim();
     const [existingUser] = await db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.email, validatedData.email))
+      .where(eq(users.email, normalizedEmail))
       .limit(1);
 
     if (existingUser) {
@@ -50,7 +60,7 @@ class UserService {
     const [newUser] = await db
       .insert(users)
       .values({
-        email: validatedData.email,
+        email: normalizedEmail,
         name: validatedData.name!,
         passwordHash: hashedPassword,
       })
@@ -58,7 +68,14 @@ class UserService {
 
     if (!newUser) throw new InternalServerError("User creation failed.");
 
-    const token = await generateToken({ id: newUser.id, email: newUser.email });
+    const accesToken = await generateAccessToken({
+      id: newUser.id,
+      email: newUser.email,
+    });
+    const refreshToken = await generateRefreshToken({
+      id: newUser.id,
+      email: newUser.email,
+    });
 
     return {
       user: {
@@ -67,7 +84,8 @@ class UserService {
         name: newUser.name,
         createdAt: newUser.createdAt,
       },
-      token,
+      accesToken,
+      refreshToken,
     };
   }
 
@@ -76,8 +94,8 @@ class UserService {
    * Prevents timing attacks by ensuring a bcrypt comparison happens
    * even if the user does not exist.
    */
-  async loginUser(input: userType) {
-    const validatedData = userSchema.parse(input);
+  async loginUser(input: loginType) {
+    const validatedData = loginSchema.parse(input);
 
     const DUMMY_HASH =
       "$2b$12$K8V9L6Xp6z2QzR6eR6z2QeR6z2QeR6z2QeR6z2QeR6z2QeR6z2Qe.";
@@ -95,7 +113,14 @@ class UserService {
       throw new UnauthorizedError("Invalid email or password.");
     }
 
-    const token = await generateToken({ id: user.id, email: user.email });
+    const accessToken = await generateAccessToken({
+      id: user.id,
+      email: user.email,
+    });
+    const refreshToken = await generateRefreshToken({
+      id: user.id,
+      email: user.email,
+    });
 
     return {
       user: {
@@ -104,28 +129,37 @@ class UserService {
         email: user.email,
         createdAt: user.createdAt,
       },
-      token,
+      accessToken,
+      refreshToken,
     };
   }
 
   async logoutUser(token: string) {
     try {
-      const payload = await verifyToken(token);
+      const payload = await verifyAccessToken(token);
+
       const now = Math.floor(Date.now() / 1000);
-      const timeLeft = payload.exp! - now;
+
+      if (!payload.exp || !payload.jti) {
+        return {
+          success: true,
+          message: "Logged out successfully",
+        };
+      }
+
+      const timeLeft = payload.exp - now;
+
       if (timeLeft > 0) {
-        /**
-         * 2. Store the token in Redis with a "TTL" (Time To Live).
-         * We use the token itself as the key (or better, the 'jti' claim if you have one).
-         * Once 'timeLeft' seconds pass, Redis deletes this automatically.
-         */
-        await redis.setex(`blacklist:${token}`, timeLeft, "revoked");
+        await redis.setex(`blacklist:${payload.jti}`, timeLeft, "revoked");
       }
     } catch {
-      // If token is invalid, the user is effectively logged out.
+      // already logged out
     }
 
-    return { success: true, message: "Logged out successfully" };
+    return {
+      success: true,
+      message: "Logged out successfully",
+    };
   }
 
   async getCurrentUser(token: string) {
@@ -138,7 +172,7 @@ class UserService {
     let payload: CustomJWTPayload;
 
     try {
-      payload = (await verifyToken(token)) as unknown as CustomJWTPayload;
+      payload = (await verifyAccessToken(token)) as unknown as CustomJWTPayload;
     } catch {
       throw new UnauthorizedError("Session expired. Please login again.");
     }

@@ -16,6 +16,13 @@ export const applicationStatusEnum = pgEnum("application_status", [
   "REJECTED",
   "WITHDRAWN",
 ]);
+export const refreshTokens = pgTable("refresh_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(), // The actual hashed token or JTI
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
