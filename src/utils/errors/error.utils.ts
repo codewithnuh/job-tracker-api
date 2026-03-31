@@ -1,7 +1,7 @@
 import { ZodError } from "zod";
 import { AppError } from "./base.error";
 import { NormalizedError, ErrorDetails } from "./error.types";
-import { UnauthorizedError } from "./http.errors";
+import { BadRequestError, UnauthorizedError } from "./http.errors";
 
 /**
  * Normalizes an unknown error into a consistent structure for logging and responses.
@@ -17,6 +17,14 @@ export function normalizeError(err: unknown): NormalizedError {
     };
   }
   if (err instanceof UnauthorizedError) {
+    return {
+      message: err.message,
+      code: err.code,
+      statusCode: err.statusCode,
+      details: err.details as ErrorDetails,
+    };
+  }
+  if (err instanceof BadRequestError) {
     return {
       message: err.message,
       code: err.code,

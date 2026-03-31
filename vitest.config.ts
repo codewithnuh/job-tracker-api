@@ -8,7 +8,11 @@ dotenv.config({ path: path.resolve(__dirname, ".env") });
 export default defineConfig({
   test: {
     globals: true,
+    sequence: {
+      concurrent: false,
+    },
     environment: "node",
+    reporters: ["tree"],
     // setupFiles: ["dotenv/config"], // You can keep or remove this now
     coverage: {
       reporter: ["text", "lcov"],
