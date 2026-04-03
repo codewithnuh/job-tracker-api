@@ -1,0 +1,466 @@
+{
+  "info": {
+    "name": "Job Tracker API",
+    "description": "API collection for Job Tracker application with authentication and application management endpoints. Uses HTTP-only cookies for authentication.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "userId",
+      "value": ""
+    },
+    {
+      "key": "applicationId",
+      "value": ""
+    }
+  ],
+  "auth": {
+    "type": "noauth"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Check if the server is running"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function() {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data && jsonData.data.user) {",
+                  "    pm.collectionVariables.set('userId', jsonData.data.user.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\",\n    \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "auth", "register"]
+            },
+            "description": "Register a new user. Sets token (2hr) and refreshToken (7d) cookies."
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data && jsonData.data.user) {",
+                  "    pm.collectionVariables.set('userId', jsonData.data.user.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"john@example.com\",\n    \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "auth", "login"]
+            },
+            "description": "Login with email and password. Sets token (2hr) and refreshToken (7d) cookies."
+          }
+        },
+        {
+          "name": "Get Current User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "auth", "me"]
+            },
+            "description": "Get the currently authenticated user. Requires token cookie."
+          }
+        },
+        {
+          "name": "Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "auth", "logout"]
+            },
+            "description": "Logout - clears token and refreshToken cookies, blacklists tokens in Redis."
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "auth", "refresh"]
+            },
+            "description": "Refresh access token using refreshToken cookie. Returns new token and refreshToken cookies."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Applications",
+      "item": [
+        {
+          "name": "Create Application",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function() {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data) {",
+                  "    pm.collectionVariables.set('applicationId', jsonData.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"companyName\": \"Tech Corp\",\n    \"roleTitle\": \"Senior Software Engineer\",\n    \"status\": \"APPLIED\",\n    \"location\": \"San Francisco, CA\",\n    \"jobUrl\": \"https://example.com/job/123\",\n    \"salaryMin\": 120000,\n    \"salaryMax\": 180000,\n    \"notes\": \"Applied via company website\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/applications",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "applications"]
+            },
+            "description": "Create a new job application. Required: companyName, roleTitle. Optional: status (default: APPLIED), location, jobUrl, salaryMin, salaryMax, notes."
+          }
+        },
+        {
+          "name": "Get All Applications",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/applications",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "applications"]
+            },
+            "description": "Get all applications for the authenticated user, ordered by createdAt desc."
+          }
+        },
+        {
+          "name": "Get Application by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/applications/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "applications", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{applicationId}}",
+                  "description": "Application UUID"
+                }
+              ]
+            },
+            "description": "Get a specific application by ID. Returns 404 if not found, 401 if not owned by user."
+          }
+        },
+        {
+          "name": "Update Application",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"companyName\": \"Updated Tech Corp\",\n    \"roleTitle\": \"Lead Software Engineer\",\n    \"location\": \"Remote\",\n    \"notes\": \"Updated notes\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/applications/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "applications", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{applicationId}}",
+                  "description": "Application UUID"
+                }
+              ]
+            },
+            "description": "Update application details (partial update). All fields optional: companyName, roleTitle, status, location, jobUrl, salaryMin, salaryMax, notes."
+          }
+        },
+        {
+          "name": "Update Application Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"status\": \"SCREENING\",\n    \"note\": \"Phone screen scheduled for next week\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/applications/:id/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "applications", ":id", "status"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{applicationId}}",
+                  "description": "Application UUID"
+                }
+              ]
+            },
+            "description": "Update application status with activity logging. Validates status transitions. Valid statuses: APPLIED, SCREENING, INTERVIEW, OFFER, ACCEPTED, REJECTED, WITHDRAWN."
+          }
+        },
+        {
+          "name": "Delete Application",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/applications/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "applications", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{applicationId}}",
+                  "description": "Application UUID"
+                }
+              ]
+            },
+            "description": "Delete an application. Returns 404 if not found, 401 if not owned by user."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Protected Route (Example)",
+      "item": [
+        {
+          "name": "Protected Route",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/protected-route",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "protected-route"]
+            },
+            "description": "Example protected route that requires authentication via authMiddleware."
+          }
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [""]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('Response is successful', function() {",
+          "    pm.response.to.be.success;",
+          "});"
+        ]
+      }
+    }
+  ]
+}

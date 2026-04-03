@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import Fastify, { FastifyInstance } from "fastify";
 import { registerErrorHandler } from "./error-handler";
-import { BadRequestError, UnauthorizedError, NotFoundError } from "../utils/errors/http.errors";
+import {
+  BadRequestError,
+  UnauthorizedError,
+  NotFoundError,
+} from "../utils/errors/http.errors";
 
 describe("registerErrorHandler", () => {
   let app: FastifyInstance;
@@ -108,7 +112,9 @@ describe("registerErrorHandler", () => {
       });
 
       const body = JSON.parse(response.body);
-      expect(body.error.details).toBe("Check server logs for detailed trace");
+      expect(body.error.details).toBe(
+        "An unexpected error occurred. Please try again later.",
+      );
     });
   });
 

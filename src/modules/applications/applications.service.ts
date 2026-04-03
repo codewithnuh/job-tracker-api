@@ -18,10 +18,7 @@ import { eq } from "drizzle-orm";
 import { canTransition } from "./status-machine";
 
 export class ApplicationService {
-  async createApplication(
-    userId: string,
-    input: CreateApplicationType,
-  ) {
+  async createApplication(userId: string, input: CreateApplicationType) {
     if (!userId) {
       throw new BadRequestError("User ID is required");
     }

@@ -88,7 +88,7 @@ class ApplicationController {
     reply: FastifyReply,
   ) {
     const token = request.cookies.token;
-    if (!token) throw new Error("Please Authenticate");
+    if (!token) throw new UnauthorizedError("Please Authenticate");
     const { user } = await userService.getCurrentUser(token);
     const { id } = request.params;
     const body = request.body;
@@ -116,7 +116,7 @@ class ApplicationController {
     reply: FastifyReply,
   ) {
     const token = request.cookies.token;
-    if (!token) throw new Error("Please Authenticate");
+    if (!token) throw new UnauthorizedError("Please Authenticate");
     const { user } = await userService.getCurrentUser(token);
     const { id } = request.params;
     const application = await applicationService.updateApplicationStatus(
@@ -140,7 +140,7 @@ class ApplicationController {
     reply: FastifyReply,
   ) {
     const token = request.cookies.token;
-    if (!token) throw new Error("Please Authenticate");
+    if (!token) throw new UnauthorizedError("Please Authenticate");
     const { user } = await userService.getCurrentUser(token);
     const { id } = request.params;
     await applicationService.deleteApplication(id, user.id);

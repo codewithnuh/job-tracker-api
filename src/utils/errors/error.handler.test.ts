@@ -86,7 +86,9 @@ describe("handleError", () => {
       const result = handleError(error);
 
       expect(result.normalized.statusCode).toBe(500);
-      expect(result.normalized.message).toBe("An internal server error occurred");
+      expect(result.normalized.message).toBe(
+        "An internal server error occurred",
+      );
       expect(result.normalized.code).toBe("INTERNAL_SERVER_ERROR");
     });
 
@@ -127,7 +129,7 @@ describe("handleError", () => {
       const result = handleError(error);
 
       expect(result.response.error.details).toBe(
-        "Check server logs for detailed trace",
+        "An unexpected error occurred. Please try again later.",
       );
     });
   });

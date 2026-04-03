@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { randomUUID } from "crypto";
 
 import { db } from "../../db/index";
-import { applications, users } from "../../db/schema";
+import { applications, users, activityLogs } from "../../db/schema";
 import { applicationService } from "./applications.service";
 
 import {
@@ -11,25 +11,13 @@ import {
   BadRequestError,
 } from "../../utils/errors/http.errors";
 
-import { userService } from "../auth/auth.service";
-
-vi.mock("../auth/auth.service", () => ({
-  userService: {
-    getCurrentUser: vi.fn(),
-  },
-}));
-
 let testUserId: string;
+let otherUserId: string;
 
-//
-// Reset database + create fresh user per test
-//
 beforeEach(async () => {
+  await db.delete(activityLogs);
   await db.delete(applications);
   await db.delete(users);
-
-  vi.clearAllMocks();
-  vi.restoreAllMocks();
 
   const [createdUser] = await db
     .insert(users)
@@ -40,286 +28,370 @@ beforeEach(async () => {
     })
     .returning();
 
-  if (!createdUser) {
-    throw new Error("Failed to create test user");
-  }
+  testUserId = createdUser!.id;
 
-  testUserId = createdUser.id;
+  const [otherUser] = await db
+    .insert(users)
+    .values({
+      name: "Other User",
+      email: `other-${randomUUID()}@example.com`,
+      passwordHash: "hashed",
+    })
+    .returning();
+
+  otherUserId = otherUser!.id;
 });
 
-afterAll(async () => {
+afterEach(async () => {
+  await db.delete(activityLogs);
   await db.delete(applications);
   await db.delete(users);
 });
 
-//
-// CREATE APPLICATION
-//
-describe("createApplication", () => {
-  it("creates a new application with minimum required fields", async () => {
-    const app = await applicationService.createApplication(testUserId, {
-      companyName: "Google",
-      roleTitle: "Frontend Engineer",
+describe("ApplicationService", () => {
+  describe("createApplication", () => {
+    it("should create application with required fields only", async () => {
+      const app = await applicationService.createApplication(testUserId, {
+        companyName: "Google",
+        roleTitle: "Frontend Engineer",
+      });
+
+      expect(app.id).toBeDefined();
+      expect(app.userId).toBe(testUserId);
+      expect(app.companyName).toBe("Google");
+      expect(app.roleTitle).toBe("Frontend Engineer");
+      expect(app.status).toBe("APPLIED");
     });
 
-    expect(app.id).toBeDefined();
-    expect(app.userId).toBe(testUserId);
-    expect(app.companyName).toBe("Google");
-    expect(app.roleTitle).toBe("Frontend Engineer");
-    expect(app.status).toBe("APPLIED");
-    expect(app.appliedAt).toBeDefined();
-    expect(app.createdAt).toBeDefined();
-  });
+    it("should create application with all optional fields", async () => {
+      const app = await applicationService.createApplication(testUserId, {
+        companyName: "Meta",
+        roleTitle: "Product Designer",
+        location: "London, UK",
+        jobUrl: "https://careers.meta.com/jobs/123",
+        salaryMin: 50000,
+        salaryMax: 70000,
+        notes: "Referred by friend",
+        status: "INTERVIEW",
+      });
 
-  it("creates an application with all optional fields", async () => {
-    const app = await applicationService.createApplication(testUserId, {
-      companyName: "Meta",
-      roleTitle: "Product Designer",
-      location: "London, UK",
-      jobUrl: "https://careers.meta.com/jobs/123",
-      salaryMin: 50000,
-      salaryMax: 70000,
-      notes: "Referred by friend",
-      status: "INTERVIEW",
+      expect(app.location).toBe("London, UK");
+      expect(app.jobUrl).toBe("https://careers.meta.com/jobs/123");
+      expect(app.salaryMin).toBe(50000);
+      expect(app.salaryMax).toBe(70000);
+      expect(app.notes).toBe("Referred by friend");
+      expect(app.status).toBe("INTERVIEW");
     });
 
-    expect(app.location).toBe("London, UK");
-    expect(app.jobUrl).toBe("https://careers.meta.com/jobs/123");
-    expect(app.salaryMin).toBe(50000);
-    expect(app.salaryMax).toBe(70000);
-    expect(app.notes).toBe("Referred by friend");
-    expect(app.status).toBe("INTERVIEW");
-  });
-
-  it("creates application using token", async () => {
-    vi.mocked(userService.getCurrentUser).mockResolvedValue({
-      user: {
-        id: testUserId,
-        name: "Test",
-        email: "test@example.com",
-        createdAt: new Date(),
-      },
+    it("should throw BadRequestError for empty company name", async () => {
+      await expect(
+        applicationService.createApplication(testUserId, {
+          companyName: "",
+          roleTitle: "Developer",
+        }),
+      ).rejects.toThrow(BadRequestError);
     });
 
-    const app = await applicationService.createApplication("valid-token", {
-      companyName: "Netflix",
-      roleTitle: "Backend Engineer",
+    it("should throw BadRequestError for empty role title", async () => {
+      await expect(
+        applicationService.createApplication(testUserId, {
+          companyName: "Google",
+          roleTitle: "",
+        }),
+      ).rejects.toThrow(BadRequestError);
     });
 
-    expect(app.companyName).toBe("Netflix");
-    expect(app.userId).toBe(testUserId);
-  });
-
-  it("throws UnauthorizedError for invalid token", async () => {
-    vi.mocked(userService.getCurrentUser).mockRejectedValue(
-      new UnauthorizedError("Invalid token"),
-    );
-
-    await expect(
-      applicationService.createApplication("invalid-token", {
-        companyName: "Tesla",
-        roleTitle: "Engineer",
-      }),
-    ).rejects.toThrow(UnauthorizedError);
-  });
-
-  it("throws BadRequestError if required fields are missing", async () => {
-    await expect(
-      applicationService.createApplication(testUserId, {
-        companyName: "",
-        roleTitle: "",
-      }),
-    ).rejects.toThrow(BadRequestError);
-  });
-
-  it("throws BadRequestError if userId is missing", async () => {
-    await expect(
-      applicationService.createApplication(testUserId, {
-        companyName: "Tesla",
-        roleTitle: "Engineer",
-      }),
-    ).rejects.toThrow(BadRequestError);
-  });
-
-  it("throws BadRequestError if status is invalid", async () => {
-    await expect(
-      applicationService.createApplication(testUserId, {
-        companyName: "Tesla",
-        roleTitle: "Engineer",
-        // @ts-ignore
-        status: "INVALID_STATUS",
-      }),
-    ).rejects.toThrow(BadRequestError);
-  });
-});
-
-//
-// GET APPLICATION
-//
-describe("getApplication", () => {
-  it("returns application when found and user owns it", async () => {
-    const created = await applicationService.createApplication(testUserId, {
-      companyName: "GetTest",
-      roleTitle: "Developer",
+    it("should throw BadRequestError for invalid status", async () => {
+      await expect(
+        applicationService.createApplication(testUserId, {
+          companyName: "Google",
+          roleTitle: "Developer",
+          // @ts-expect-error Testing invalid status
+          status: "INVALID_STATUS",
+        }),
+      ).rejects.toThrow(BadRequestError);
     });
 
-    const app = await applicationService.getApplication(created.id, testUserId);
-
-    expect(app.id).toBe(created.id);
-    expect(app.companyName).toBe("GetTest");
+    it("should throw BadRequestError when userId is empty", async () => {
+      await expect(
+        applicationService.createApplication("", {
+          companyName: "Google",
+          roleTitle: "Developer",
+        }),
+      ).rejects.toThrow(BadRequestError);
+    });
   });
 
-  it("throws NotFoundError when application does not exist", async () => {
-    await expect(
-      applicationService.getApplication(
-        "00000000-0000-0000-0000-000000000000",
-        testUserId,
-      ),
-    ).rejects.toThrow(NotFoundError);
-  });
+  describe("getApplication", () => {
+    it("should return application when found and user owns it", async () => {
+      const created = await applicationService.createApplication(testUserId, {
+        companyName: "Test Company",
+        roleTitle: "Developer",
+      });
 
-  it("throws UnauthorizedError when user does not own application", async () => {
-    const created = await applicationService.createApplication(testUserId, {
-      companyName: "OtherUser",
-      roleTitle: "Developer",
+      const app = await applicationService.getApplication(created.id, testUserId);
+
+      expect(app.id).toBe(created.id);
+      expect(app.companyName).toBe("Test Company");
     });
 
-    await expect(
-      applicationService.getApplication(
+    it("should throw NotFoundError when application does not exist", async () => {
+      await expect(
+        applicationService.getApplication(
+          "00000000-0000-0000-0000-000000000000",
+          testUserId,
+        ),
+      ).rejects.toThrow(NotFoundError);
+    });
+
+    it("should throw UnauthorizedError when user does not own application", async () => {
+      const created = await applicationService.createApplication(testUserId, {
+        companyName: "Other Company",
+        roleTitle: "Developer",
+      });
+
+      await expect(
+        applicationService.getApplication(
+          created.id,
+          "00000000-0000-0000-0000-000000000001",
+        ),
+      ).rejects.toThrow(UnauthorizedError);
+    });
+  });
+
+  describe("getAllApplications", () => {
+    it("should return all applications for user", async () => {
+      await applicationService.createApplication(testUserId, {
+        companyName: "Company A",
+        roleTitle: "Dev A",
+      });
+
+      await applicationService.createApplication(testUserId, {
+        companyName: "Company B",
+        roleTitle: "Dev B",
+      });
+
+      const apps = await applicationService.getAllApplications(testUserId);
+
+      expect(apps).toHaveLength(2);
+    });
+
+    it("should return empty array when no applications exist", async () => {
+      const apps = await applicationService.getAllApplications(testUserId);
+      expect(apps).toEqual([]);
+    });
+
+    it("should NOT return other users applications", async () => {
+      await applicationService.createApplication(testUserId, {
+        companyName: "My Company",
+        roleTitle: "Developer",
+      });
+
+      await applicationService.createApplication(otherUserId, {
+        companyName: "Other Company",
+        roleTitle: "Developer",
+      });
+
+      const apps = await applicationService.getAllApplications(testUserId);
+      expect(apps).toHaveLength(1);
+      expect(apps[0]!.companyName).toBe("My Company");
+    });
+  });
+
+  describe("updateApplication", () => {
+    it("should update application fields", async () => {
+      const created = await applicationService.createApplication(testUserId, {
+        companyName: "Old Company",
+        roleTitle: "Junior Dev",
+      });
+
+      const updated = await applicationService.updateApplication(
         created.id,
-        "00000000-0000-0000-0000-000000000001",
-      ),
-    ).rejects.toThrow(UnauthorizedError);
-  });
-});
+        testUserId,
+        {
+          companyName: "New Company",
+          roleTitle: "Senior Dev",
+        },
+      );
 
-//
-// GET ALL
-//
-describe("getAllApplications", () => {
-  it("returns all applications for user", async () => {
-    await applicationService.createApplication(testUserId, {
-      companyName: "Company A",
-      roleTitle: "Dev A",
+      expect(updated!.companyName).toBe("New Company");
+      expect(updated!.roleTitle).toBe("Senior Dev");
     });
 
-    await applicationService.createApplication(testUserId, {
-      companyName: "Company B",
-      roleTitle: "Dev B",
+    it("should allow partial updates", async () => {
+      const created = await applicationService.createApplication(testUserId, {
+        companyName: "Company",
+        roleTitle: "Dev",
+        location: "NYC",
+      });
+
+      const updated = await applicationService.updateApplication(
+        created.id,
+        testUserId,
+        { location: "Remote" },
+      );
+
+      expect(updated!.companyName).toBe("Company");
+      expect(updated!.location).toBe("Remote");
     });
 
-    const apps = await applicationService.getAllApplications(testUserId);
-
-    expect(apps.length).toBe(2);
-  });
-
-  it("returns empty array when no applications exist", async () => {
-    const apps = await applicationService.getAllApplications(testUserId);
-
-    expect(apps).toEqual([]);
-  });
-});
-
-//
-// UPDATE STATUS
-//
-describe("updateApplicationStatus", () => {
-  it("updates status with valid transition", async () => {
-    const created = await applicationService.createApplication(testUserId, {
-      companyName: "UpdateTest",
-      roleTitle: "Developer",
+    it("should throw NotFoundError when application does not exist", async () => {
+      await expect(
+        applicationService.updateApplication(
+          "00000000-0000-0000-0000-000000000000",
+          testUserId,
+          { companyName: "New Company" },
+        ),
+      ).rejects.toThrow(NotFoundError);
     });
 
-    const updated = await applicationService.updateApplicationStatus(
-      created.id,
-      testUserId,
-      { status: "SCREENING" },
-    );
+    it("should throw UnauthorizedError when user does not own application", async () => {
+      const created = await applicationService.createApplication(testUserId, {
+        companyName: "Private Company",
+        roleTitle: "Developer",
+      });
 
-    expect(updated.status).toBe("SCREENING");
+      await expect(
+        applicationService.updateApplication(created.id, otherUserId, {
+          companyName: "Hacked Company",
+        }),
+      ).rejects.toThrow(UnauthorizedError);
+    });
   });
 
-  it("throws NotFoundError when application does not exist", async () => {
-    await expect(
-      applicationService.updateApplicationStatus(
-        "00000000-0000-0000-0000-000000000000",
+  describe("updateApplicationStatus", () => {
+    it("should update status with valid transition", async () => {
+      const created = await applicationService.createApplication(testUserId, {
+        companyName: "Transition Company",
+        roleTitle: "Developer",
+      });
+
+      const updated = await applicationService.updateApplicationStatus(
+        created.id,
         testUserId,
         { status: "SCREENING" },
-      ),
-    ).rejects.toThrow(NotFoundError);
-  });
+      );
 
-  it("throws UnauthorizedError when user does not own application", async () => {
-    const created = await applicationService.createApplication(testUserId, {
-      companyName: "OtherApp",
-      roleTitle: "Developer",
+      expect(updated!.status).toBe("SCREENING");
     });
 
-    await expect(
-      applicationService.updateApplicationStatus(
+    it("should create activity log entry", async () => {
+      const created = await applicationService.createApplication(testUserId, {
+        companyName: "Log Company",
+        roleTitle: "Developer",
+      });
+
+      await applicationService.updateApplicationStatus(
         created.id,
-        "00000000-0000-0000-0000-000000000001",
-        { status: "SCREENING" },
-      ),
-    ).rejects.toThrow(UnauthorizedError);
-  });
-
-  it("throws BadRequestError for invalid transition", async () => {
-    const created = await applicationService.createApplication(testUserId, {
-      companyName: "TransitionTest",
-      roleTitle: "Developer",
-    });
-
-    await expect(
-      applicationService.updateApplicationStatus(created.id, testUserId, {
-        status: "ACCEPTED",
-      }),
-    ).rejects.toThrow(BadRequestError);
-  });
-});
-
-//
-// DELETE
-//
-describe("deleteApplication", () => {
-  it("deletes application when user owns it", async () => {
-    const created = await applicationService.createApplication(testUserId, {
-      companyName: "DeleteTest",
-      roleTitle: "Developer",
-    });
-
-    const result = await applicationService.deleteApplication(
-      created.id,
-      testUserId,
-    );
-
-    expect(result.success).toBe(true);
-
-    await expect(
-      applicationService.getApplication(created.id, testUserId),
-    ).rejects.toThrow(NotFoundError);
-  });
-
-  it("throws NotFoundError when application does not exist", async () => {
-    await expect(
-      applicationService.deleteApplication(
-        "00000000-0000-0000-0000-000000000000",
         testUserId,
-      ),
-    ).rejects.toThrow(NotFoundError);
-  });
+        { status: "SCREENING", note: "Phone screen scheduled" },
+      );
 
-  it("throws UnauthorizedError when user does not own application", async () => {
-    const created = await applicationService.createApplication(testUserId, {
-      companyName: "OtherDelete",
-      roleTitle: "Developer",
+      const logs = await db.select().from(activityLogs);
+      const appLogs = logs.filter((log) => log.applicationId === created.id);
+
+      expect(appLogs).toHaveLength(1);
+      expect(appLogs[0]!.fromStatus).toBe("APPLIED");
+      expect(appLogs[0]!.toStatus).toBe("SCREENING");
+      expect(appLogs[0]!.note).toBe("Phone screen scheduled");
     });
 
-    await expect(
-      applicationService.deleteApplication(
+    it("should throw BadRequestError for invalid transition (APPLIED -> ACCEPTED)", async () => {
+      const created = await applicationService.createApplication(testUserId, {
+        companyName: "Invalid Company",
+        roleTitle: "Developer",
+      });
+
+      await expect(
+        applicationService.updateApplicationStatus(created.id, testUserId, {
+          status: "ACCEPTED",
+        }),
+      ).rejects.toThrow(BadRequestError);
+    });
+
+    it("should throw BadRequestError for invalid transition (REJECTED -> SCREENING)", async () => {
+      const created = await applicationService.createApplication(testUserId, {
+        companyName: "Rejected Company",
+        roleTitle: "Developer",
+      });
+
+      await applicationService.updateApplicationStatus(created.id, testUserId, {
+        status: "REJECTED",
+      });
+
+      await expect(
+        applicationService.updateApplicationStatus(created.id, testUserId, {
+          status: "SCREENING",
+        }),
+      ).rejects.toThrow(BadRequestError);
+    });
+
+    it("should throw NotFoundError when application does not exist", async () => {
+      await expect(
+        applicationService.updateApplicationStatus(
+          "00000000-0000-0000-0000-000000000000",
+          testUserId,
+          { status: "SCREENING" },
+        ),
+      ).rejects.toThrow(NotFoundError);
+    });
+
+    it("should throw UnauthorizedError when user does not own application", async () => {
+      const created = await applicationService.createApplication(testUserId, {
+        companyName: "OtherApp",
+        roleTitle: "Developer",
+      });
+
+      await expect(
+        applicationService.updateApplicationStatus(
+          created.id,
+          otherUserId,
+          { status: "SCREENING" },
+        ),
+      ).rejects.toThrow(UnauthorizedError);
+    });
+  });
+
+  describe("deleteApplication", () => {
+    it("should delete application and return success", async () => {
+      const created = await applicationService.createApplication(testUserId, {
+        companyName: "Delete Company",
+        roleTitle: "Developer",
+      });
+
+      const result = await applicationService.deleteApplication(
         created.id,
-        "00000000-0000-0000-0000-000000000001",
-      ),
-    ).rejects.toThrow(UnauthorizedError);
+        testUserId,
+      );
+
+      expect(result.success).toBe(true);
+
+      await expect(
+        applicationService.getApplication(created.id, testUserId),
+      ).rejects.toThrow(NotFoundError);
+    });
+
+    it("should throw NotFoundError when application does not exist", async () => {
+      await expect(
+        applicationService.deleteApplication(
+          "00000000-0000-0000-0000-000000000000",
+          testUserId,
+        ),
+      ).rejects.toThrow(NotFoundError);
+    });
+
+    it("should throw UnauthorizedError when user does not own application", async () => {
+      const created = await applicationService.createApplication(testUserId, {
+        companyName: "Protected Company",
+        roleTitle: "Developer",
+      });
+
+      await expect(
+        applicationService.deleteApplication(
+          created.id,
+          otherUserId,
+        ),
+      ).rejects.toThrow(UnauthorizedError);
+    });
   });
 });
