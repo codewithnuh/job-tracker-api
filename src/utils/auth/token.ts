@@ -131,27 +131,12 @@ export const verifyAccessToken = async (
       audience: AUDIENCE,
       clockTolerance: "5s",
     });
-
-    //
-    // 1) Ensure correct token type
-    //
-
     if (payload.type !== "access") {
       throw new UnauthorizedError("Invalid token type");
     }
-
-    //
-    // 2) Ensure JTI exists
-    //
-
     if (!payload.jti) {
       throw new UnauthorizedError("Invalid token");
     }
-
-    //
-    // 3) Check blacklist (logout enforcement)
-    //
-
     const isRevoked = await redis.exists(`blacklist:${payload.jti}`);
 
     if (isRevoked) {

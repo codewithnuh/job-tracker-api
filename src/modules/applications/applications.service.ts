@@ -1,8 +1,10 @@
 import z from "zod";
 import {
   createApplicationSchema,
+  updateApplicationSchema,
   updateApplicationStatusSchema,
   CreateApplicationType,
+  UpdateApplicationType,
   UpdateApplicationStatusType,
 } from "../../schemas/schema";
 import {
@@ -11,31 +13,31 @@ import {
   UnauthorizedError,
 } from "../../utils/errors/http.errors";
 import { db } from "../../db/index";
-import { applications, activityLogs, users } from "../../db/schema";
+import { applications, activityLogs } from "../../db/schema";
 import { eq } from "drizzle-orm";
 import { canTransition } from "./status-machine";
-import { userService } from "../auth/auth.service";
 
 export class ApplicationService {
   async createApplication(
     userId: string,
-    input: Omit<CreateApplicationType, "userId">,
+    input: CreateApplicationType,
   ) {
     if (!userId) {
       throw new BadRequestError("User ID is required");
     }
 
-    // Validate input with zod
-    const result = createApplicationSchema.safeParse({ userId, ...input });
+    const result = createApplicationSchema.safeParse(input);
     if (!result.success) {
       throw new BadRequestError(
         result.error.issues.map((i) => i.message).join(", "),
       );
     }
 
-    const validatedInput = result.data;
+    const validatedInput = {
+      ...result.data,
+      userId,
+    };
 
-    // Insert into database
     const newApplication = await db
       .insert(applications)
       .values(validatedInput)
@@ -125,6 +127,47 @@ export class ApplicationService {
       toStatus: newStatus,
       note: note || null,
     });
+
+    return updatedApplication!;
+  }
+
+  async updateApplication(
+    applicationId: string,
+    userId: string,
+    input: UpdateApplicationType,
+  ) {
+    const application = await db.query.applications.findFirst({
+      where: eq(applications.id, applicationId),
+    });
+
+    if (!application) {
+      throw new NotFoundError("Application not found");
+    }
+
+    if (application.userId !== userId) {
+      throw new UnauthorizedError("Not authorized to update this application");
+    }
+
+    let validatedInput: UpdateApplicationType;
+
+    try {
+      validatedInput = updateApplicationSchema.parse(input);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const issue = error.issues?.[0];
+        throw new BadRequestError(issue?.message || "Invalid input");
+      }
+      throw error;
+    }
+
+    const [updatedApplication] = await db
+      .update(applications)
+      .set({
+        ...validatedInput,
+        updatedAt: new Date(),
+      })
+      .where(eq(applications.id, applicationId))
+      .returning();
 
     return updatedApplication!;
   }

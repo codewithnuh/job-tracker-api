@@ -8,6 +8,8 @@ import { applicationRoutes } from "./modules/applications/applications.routes";
 const fastify = Fastify({
   logger: {
     level: "info",
+
+
     transport: {
       target: "pino-pretty",
     },

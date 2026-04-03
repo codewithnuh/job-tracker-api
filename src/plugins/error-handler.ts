@@ -23,6 +23,7 @@ export const registerErrorHandler = fp(async function (
       `Route ${request.method} ${request.url} not found`,
     );
     const { response } = handleError(notFoundError);
+
     reply.status(404).send(response);
   });
 });

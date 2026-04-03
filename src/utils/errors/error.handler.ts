@@ -15,7 +15,7 @@ export function handleError(err: unknown) {
     message: normalized.message,
     code: normalized.code,
     // We mask the details for security. The full details are returned in 'normalized' for the logger.
-    details: "Check server logs for detailed trace", 
+    details: "Something went wrong",
   });
 
   return {
