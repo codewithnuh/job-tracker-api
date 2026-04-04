@@ -56,3 +56,6 @@ yarn.lock
 *.temp
 *.bak
 *.swp
+
+.vercel
+.env*.local

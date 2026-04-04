@@ -1,8 +1,7 @@
-import { awsLambdaFastify } from "@fastify/aws-lambda";
 import { buildApp } from "../src/server";
+const app = buildApp();
 
-const fastify = buildApp();
-
-export const handler = awsLambdaFastify(fastify, {
-  enforceBase64: (_) => true,
-});
+export default async (req: any, res: any) => {
+  await app.ready();
+  app.server.emit("request", req, res);
+};
