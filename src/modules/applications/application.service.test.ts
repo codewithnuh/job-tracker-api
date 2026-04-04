@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 
 import { db } from "../../db/index";
 import { applications, users, activityLogs } from "../../db/schema";
+import { eq } from "drizzle-orm";
 import { applicationService } from "./applications.service";
 
 import {
@@ -182,15 +183,23 @@ describe("ApplicationService", () => {
     });
 
     it("should NOT return other users applications", async () => {
-      await applicationService.createApplication(testUserId, {
-        companyName: "My Company",
-        roleTitle: "Developer",
-      });
+      const [myApp] = await db
+        .insert(applications)
+        .values({
+          userId: testUserId,
+          companyName: "My Company",
+          roleTitle: "Developer",
+        })
+        .returning();
 
-      await applicationService.createApplication(otherUserId, {
-        companyName: "Other Company",
-        roleTitle: "Developer",
-      });
+      const [otherApp] = await db
+        .insert(applications)
+        .values({
+          userId: otherUserId,
+          companyName: "Other Company",
+          roleTitle: "Developer",
+        })
+        .returning();
 
       const apps = await applicationService.getAllApplications(testUserId);
       expect(apps).toHaveLength(1);
@@ -337,14 +346,19 @@ describe("ApplicationService", () => {
     });
 
     it("should throw UnauthorizedError when user does not own application", async () => {
-      const created = await applicationService.createApplication(testUserId, {
-        companyName: "OtherApp",
-        roleTitle: "Developer",
-      });
+      const [created] = await db
+        .insert(applications)
+        .values({
+          userId: testUserId,
+          companyName: "OtherApp",
+          roleTitle: "Developer",
+          status: "APPLIED",
+        })
+        .returning();
 
       await expect(
         applicationService.updateApplicationStatus(
-          created.id,
+          created!.id,
           otherUserId,
           { status: "SCREENING" },
         ),
