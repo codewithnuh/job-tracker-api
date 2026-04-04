@@ -1,55 +1,63 @@
 import Fastify from "fastify";
-import "dotenv/config";
 import { registerErrorHandler } from "./plugins/error-handler";
 import { authRoutes } from "./modules/auth/auth.routes";
 import fastifyCookie from "@fastify/cookie";
 import { authMiddleware } from "./middleware/auth.middleware";
 import { applicationRoutes } from "./modules/applications/applications.routes";
 import { statsRoutes } from "./modules/stats/stats.routes";
-const fastify = Fastify({
-  logger: {
-    level: "info",
 
+export function buildApp() {
+  const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
 
-    transport: {
-      target: "pino-pretty",
+  const fastify = isServerless
+    ? Fastify({ logger: { level: "warn" } })
+    : Fastify({
+        logger: {
+          level: "info",
+          transport: {
+            target: "pino-pretty",
+          },
+        },
+      });
+
+  fastify.register(registerErrorHandler);
+
+  fastify.register(fastifyCookie, {
+    secret: process.env.COOKIE_SECRET as string,
+    hook: "onRequest",
+  });
+
+  fastify.register(authRoutes);
+  fastify.register(applicationRoutes);
+  fastify.register(statsRoutes);
+
+  fastify.get("/health", async () => {
+    return { status: "OK" };
+  });
+
+  fastify.get(
+    "/v1/protected-route",
+    { preHandler: [authMiddleware] },
+    async (request, reply) => {
+      return {
+        message: "You are in!",
+        currentUser: request.user,
+      };
     },
-  },
-});
+  );
 
-// Setup Global Error Handler
-// Note: We're not using .register() here to keep it in the global scope without fastify-plugin
-fastify.register(registerErrorHandler);
+  return fastify;
+}
 
-fastify.register(fastifyCookie, {
-  secret: process.env.COOKIE_SECRET as string,
-  hook: "onRequest",
-});
-// Register routes
-fastify.register(authRoutes);
-fastify.register(applicationRoutes);
-fastify.register(statsRoutes);
-// Simple health check
-fastify.get("/health", async () => {
-  return { status: "OK" };
-});
-fastify.get(
-  "/v1/protected-route",
-  { preHandler: [authMiddleware] },
-  async (request, reply) => {
-    return {
-      message: "You are in!",
-      currentUser: request.user, // Fully typed!
-    };
-  },
-);
-const PORT = Number(process.env.PORT) || 3000;
+if (!process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  const fastify = buildApp();
+  const PORT = Number(process.env.PORT) || 3000;
 
-// Run the server!
-fastify.listen({ port: PORT, host: "0.0.0.0" }, function (err, address) {
-  if (err) {
-    fastify.log.error(err);
-    process.exit(1);
-  }
-  fastify.log.info(`Server is now listening on ${address}`);
-});
+  fastify.listen({ port: PORT, host: "0.0.0.0" }, function (err, address) {
+    if (err) {
+      fastify.log.error(err);
+      process.exit(1);
+    }
+    fastify.log.info(`Server is now listening on ${address}`);
+  });
+}

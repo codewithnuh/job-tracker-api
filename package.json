@@ -7,6 +7,7 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "vercel-build": "echo 'Vercel handles the build'",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -20,6 +21,7 @@
   "license": "ISC",
   "packageManager": "pnpm@10.14.0",
   "dependencies": {
+    "@fastify/aws-lambda": "^6.4.0",
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.2.0",
     "@fastify/helmet": "^13.0.2",
