@@ -1,4 +1,3 @@
-import "dotenv/config";
 import { awsLambdaFastify } from "@fastify/aws-lambda";
 import { buildApp } from "../src/server";
 
