@@ -1,10 +1,10 @@
 import Fastify from "fastify";
-import { registerErrorHandler } from "./plugins/error-handler";
-import { authRoutes } from "./modules/auth/auth.routes";
+import { registerErrorHandler } from "./plugins/error-handler.js";
+import { authRoutes } from "./modules/auth/auth.routes.js";
 import fastifyCookie from "@fastify/cookie";
-import { authMiddleware } from "./middleware/auth.middleware";
-import { applicationRoutes } from "./modules/applications/applications.routes";
-import { statsRoutes } from "./modules/stats/stats.routes";
+import { authMiddleware } from "./middleware/auth.middleware.js";
+import { applicationRoutes } from "./modules/applications/applications.routes.js";
+import { statsRoutes } from "./modules/stats/stats.routes.js";
 
 export function buildApp() {
   const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;

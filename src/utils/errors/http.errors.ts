@@ -1,5 +1,5 @@
 import { extend } from "zod/mini";
-import { AppError } from "./base.error";
+import { AppError } from "./base.error.js";
 
 export class BadRequestError extends AppError {
   constructor(message = "Bad Request", details?: unknown) {

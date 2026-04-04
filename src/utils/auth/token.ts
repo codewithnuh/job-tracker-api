@@ -1,7 +1,7 @@
-import { SignJWT, jwtVerify, JWTPayload } from "jose";
 import { v4 as uuidv4 } from "uuid";
-import { UnauthorizedError } from "../errors/http.errors";
-import { redis } from "../redis";
+import type { JWTPayload } from "jose";
+import { UnauthorizedError } from "../errors/http.errors.js";
+import { redis } from "../redis.js";
 
 /**
  * Environment validation
@@ -49,13 +49,14 @@ interface CustomPayload extends JWTPayload {
  * Shared JWT builder
  */
 
-const buildToken = (
+const buildToken = async (
   user: { id: string; email: string },
   type: "access" | "refresh",
   secret: Uint8Array,
   ttl: string,
 ) => {
   const jti = uuidv4();
+  const { SignJWT } = await import("jose");
 
   return new SignJWT({
     sub: user.id,
@@ -77,11 +78,17 @@ const buildToken = (
  * Generate tokens
  */
 
-export const generateAccessToken = (user: { id: string; email: string }) => {
+export const generateAccessToken = async (user: {
+  id: string;
+  email: string;
+}) => {
   return buildToken(user, "access", JWT_ACCESS_SECRET, ACCESS_TOKEN_TTL);
 };
 
-export const generateRefreshToken = (user: { id: string; email: string }) => {
+export const generateRefreshToken = async (user: {
+  id: string;
+  email: string;
+}) => {
   return buildToken(user, "refresh", JWT_REFRESH_SECRET, REFRESH_TOKEN_TTL);
 };
 
@@ -95,6 +102,8 @@ const verifyToken = async (
   secret: Uint8Array,
 ): Promise<CustomPayload> => {
   try {
+    const jose = await import("jose");
+    const { jwtVerify } = jose as typeof import("jose");
     const { payload } = await jwtVerify(token, secret, {
       issuer: ISSUER,
       audience: AUDIENCE,
@@ -126,6 +135,8 @@ export const verifyAccessToken = async (
   token: string,
 ): Promise<CustomPayload> => {
   try {
+    const jose = await import("jose");
+    const { jwtVerify } = jose as typeof import("jose");
     const { payload } = await jwtVerify(token, JWT_ACCESS_SECRET, {
       issuer: ISSUER,
       audience: AUDIENCE,
@@ -149,6 +160,6 @@ export const verifyAccessToken = async (
   }
 };
 
-export const verifyRefreshToken = (token: string) => {
+export const verifyRefreshToken = async (token: string) => {
   return verifyToken(token, "refresh", JWT_REFRESH_SECRET);
 };

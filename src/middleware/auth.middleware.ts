@@ -1,8 +1,8 @@
 import { FastifyRequest } from "fastify";
-import { verifyAccessToken } from "../utils/auth/token";
+import { verifyAccessToken } from "../utils/auth/token.js";
 import { UnauthorizedError, NotFoundError } from "../utils/errors/http.errors";
-import { db } from "../db";
-import { users } from "../db/schema";
+import { db } from "../db/index.js";
+import { users } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 
 export const authMiddleware = async (request: FastifyRequest) => {

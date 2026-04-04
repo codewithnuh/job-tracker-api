@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { handleError } from "./error.handler";
+import { handleError } from "./error.handler.js";
 import {
   BadRequestError,
   UnauthorizedError,
@@ -7,7 +7,7 @@ import {
   ForbiddenError,
   ConflictError,
   InternalServerError,
-} from "./http.errors";
+} from "./http.errors.js";
 
 vi.mock("../../lib/response", () => ({
   createErrorResponse: vi.fn(({ status_code, message, code, details }) => ({

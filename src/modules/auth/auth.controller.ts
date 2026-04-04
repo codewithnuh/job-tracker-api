@@ -1,9 +1,9 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { userService } from "./auth.service";
-import { userType } from "../../schemas/schema";
-import { verifyAccessToken } from "../../utils/auth/token";
-import { createSuccessResponse } from "../../lib/response";
-import { UnauthorizedError } from "../../utils/errors/http.errors";
+import { userType } from "../../schemas/schema.js";
+import { verifyAccessToken } from "../../utils/auth/token.js";
+import { createSuccessResponse } from "../../lib/response.js";
+import { UnauthorizedError } from "../../utils/errors/http.errors.js";
 
 class AuthController {
   async register(

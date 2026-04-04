@@ -1,9 +1,9 @@
 import { ZodError } from "zod";
-import { AppError } from "./base.error";
-import { NormalizedError, ErrorDetails } from "./error.types";
-import { BadRequestError, UnauthorizedError } from "./http.errors";
+import { AppError } from "./base.error.js";
+import { NormalizedError, ErrorDetails } from "./error.types.js";
+import { BadRequestError, UnauthorizedError } from "./http.errors.js";
 
-/**
+/**a
  * Normalizes an unknown error into a consistent structure for logging and responses.
  */
 export function normalizeError(err: unknown): NormalizedError {

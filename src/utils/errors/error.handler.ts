@@ -1,5 +1,5 @@
-import { normalizeError } from "./error.utils";
-import { createErrorResponse } from "../../lib/response";
+import { normalizeError } from "./error.utils.js";
+import { createErrorResponse } from "../../lib/response.js";
 
 /**
  * Handle errors by normalizing them and generating a clean, user-facing response.

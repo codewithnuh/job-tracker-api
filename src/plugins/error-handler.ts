@@ -1,7 +1,7 @@
 import fp from "fastify-plugin";
 import type { FastifyInstance } from "fastify";
-import { handleError } from "../utils/errors/error.handler";
-import { NotFoundError } from "../utils/errors/http.errors";
+import { handleError } from "../utils/errors/error.handler.js";
+import { NotFoundError } from "../utils/errors/http.errors.js";
 
 export const registerErrorHandler = fp(async function (
   fastify: FastifyInstance,

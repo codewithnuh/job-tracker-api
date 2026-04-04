@@ -1,4 +1,4 @@
-import { buildApp } from "../src/server";
+import { buildApp } from "../src/server.js";
 const app = buildApp();
 
 export default async (req: any, res: any) => {

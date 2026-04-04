@@ -1,10 +1,10 @@
 import { FastifyInstance } from "fastify";
-import { applicationController } from "./application.controller";
+import { applicationController } from "./application.controller.js";
 import {
   CreateApplicationType,
   UpdateApplicationType,
   UpdateApplicationStatusType,
-} from "../../schemas/schema";
+} from "../../schemas/schema.js";
 
 type IdParams = { id: string };
 

@@ -5,9 +5,9 @@ import {
   UpdateApplicationStatusType,
 } from "../../schemas/schema";
 import { FastifyReply } from "fastify/types/reply";
-import { applicationService } from "./applications.service";
-import { createSuccessResponse } from "../../lib/response";
-import { userService } from "../auth/auth.service";
+import { applicationService } from "./applications.service.js";
+import { createSuccessResponse } from "../../lib/response.js";
+import { userService } from "../auth/auth.service.js";
 import {
   InternalServerError,
   NotFoundError,

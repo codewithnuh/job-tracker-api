@@ -1,28 +1,28 @@
-import { db } from "../../db";
+import { db } from "../../db/index.js";
 import {
   loginSchema,
   loginType,
   registrationSchema,
   registrationType,
-} from "../../schemas/schema";
-import { users } from "../../db/schema";
+} from "../../schemas/schema.js";
+import { users } from "../../db/schema.js";
 import bcrypt from "bcrypt";
 import { eq } from "drizzle-orm";
 import z from "zod";
-import { redis } from "../../utils/redis";
+import { redis } from "../../utils/redis.js";
 import {
   ConflictError,
   InternalServerError,
   NotFoundError,
   UnauthorizedError,
   BadRequestError,
-} from "../../utils/errors/http.errors";
+} from "../../utils/errors/http.errors.js";
 import {
   generateAccessToken,
   generateRefreshToken,
   verifyAccessToken,
   verifyRefreshToken,
-} from "../../utils/auth/token";
+} from "../../utils/auth/token.js";
 
 // Define a strict interface for your token payload
 interface CustomJWTPayload {
@@ -220,7 +220,9 @@ class UserService {
 
     const isRevoked = await redis.get(`refresh_blacklist:${payload.jti}`);
     if (isRevoked) {
-      throw new UnauthorizedError("Session has been revoked. Please login again.");
+      throw new UnauthorizedError(
+        "Session has been revoked. Please login again.",
+      );
     }
 
     const user = await db.query.users.findFirst({
@@ -250,7 +252,7 @@ class UserService {
       email: user.email,
     });
 
-      return {
+    return {
       user: {
         id: user.id,
         name: user.name,
@@ -270,10 +272,16 @@ class UserService {
         return { success: true };
       }
 
-      const timeLeft = payload.exp ? payload.exp - Math.floor(Date.now() / 1000) : 604800;
+      const timeLeft = payload.exp
+        ? payload.exp - Math.floor(Date.now() / 1000)
+        : 604800;
 
       if (timeLeft > 0) {
-        await redis.setex(`refresh_blacklist:${payload.jti}`, Math.min(timeLeft, 604800), "revoked");
+        await redis.setex(
+          `refresh_blacklist:${payload.jti}`,
+          Math.min(timeLeft, 604800),
+          "revoked",
+        );
       }
     } catch {
       // token invalid, nothing to revoke

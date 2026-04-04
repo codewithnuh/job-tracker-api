@@ -1,4 +1,4 @@
-import type { ApplicationStatus } from "./application.schema";
+import type { ApplicationStatus } from "./application.schema.js";
 
 const VALID_TRANSITIONS: Record<ApplicationStatus, ApplicationStatus[]> = {
   APPLIED: ["SCREENING", "REJECTED", "WITHDRAWN"],

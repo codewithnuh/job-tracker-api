@@ -7,16 +7,16 @@ import {
   UpdateApplicationType,
   UpdateApplicationStatusType,
   ActivityLogType,
-} from "../../schemas/schema";
+} from "../../schemas/schema.js";
 import {
   BadRequestError,
   NotFoundError,
   UnauthorizedError,
-} from "../../utils/errors/http.errors";
-import { db } from "../../db/index";
-import { applications, activityLogs } from "../../db/schema";
+} from "../../utils/errors/http.errors.js";
+import { db } from "../../db/index.js";
+import { applications, activityLogs } from "../../db/schema.js";
 import { eq, sql, count } from "drizzle-orm";
-import { canTransition } from "./status-machine";
+import { canTransition } from "./status-machine.js";
 
 export class ApplicationService {
   async createApplication(userId: string, input: CreateApplicationType) {
@@ -188,7 +188,10 @@ export class ApplicationService {
     return { success: true };
   }
 
-  async getApplicationActivity(applicationId: string, userId: string): Promise<ActivityLogType[]> {
+  async getApplicationActivity(
+    applicationId: string,
+    userId: string,
+  ): Promise<ActivityLogType[]> {
     const application = await db.query.applications.findFirst({
       where: eq(applications.id, applicationId),
     });

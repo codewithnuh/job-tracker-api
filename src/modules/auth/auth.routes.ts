@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { authController } from "./auth.controller";
-import { userType } from "../../schemas/schema";
+import { authController } from "./auth.controller.js";
+import { userType } from "../../schemas/schema.js";
 
 export async function authRoutes(fastify: FastifyInstance) {
   fastify.post<{ Body: userType }>(
