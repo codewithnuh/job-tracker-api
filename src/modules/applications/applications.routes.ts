@@ -21,6 +21,11 @@ export async function applicationRoutes(fastify: FastifyInstance) {
     applicationController.getOne,
   );
 
+  fastify.get<{ Params: IdParams }>(
+    "/v1/applications/:id/activity",
+    applicationController.getActivity,
+  );
+
   fastify.patch<{
     Params: IdParams;
     Body: UpdateApplicationType;

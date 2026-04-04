@@ -3,6 +3,7 @@ import Fastify, { FastifyInstance } from "fastify";
 import fastifyCookie from "@fastify/cookie";
 import { registerErrorHandler } from "../../plugins/error-handler";
 import { applicationRoutes } from "./applications.routes";
+import { statsRoutes } from "../stats/stats.routes";
 import { userService } from "../auth/auth.service";
 import { applicationService } from "./applications.service";
 import { BadRequestError } from "../../utils/errors/http.errors";
@@ -21,6 +22,8 @@ vi.mock("./applications.service", () => ({
     updateApplication: vi.fn(),
     updateApplicationStatus: vi.fn(),
     deleteApplication: vi.fn(),
+    getApplicationActivity: vi.fn(),
+    getStats: vi.fn(),
   },
 }));
 
@@ -56,6 +59,7 @@ describe("Application Routes", () => {
     await app.register(fastifyCookie, { secret: "test", hook: "onRequest" });
     await app.register(registerErrorHandler);
     await app.register(applicationRoutes);
+    await app.register(statsRoutes);
     vi.clearAllMocks();
   });
 
@@ -303,6 +307,137 @@ describe("Application Routes", () => {
       const response = await app.inject({
         method: "DELETE",
         url: "/v1/applications/app-456",
+      });
+
+      expect(response.statusCode).toBe(401);
+    });
+  });
+
+  describe("GET /v1/applications/:id/activity", () => {
+    const mockActivityLogs = [
+      {
+        id: "log-1",
+        applicationId: "app-456",
+        fromStatus: null,
+        toStatus: "APPLIED",
+        note: "Application created",
+        createdAt: "2024-01-01T00:00:00.000Z",
+      },
+      {
+        id: "log-2",
+        applicationId: "app-456",
+        fromStatus: "APPLIED",
+        toStatus: "SCREENING",
+        note: "Phone screen scheduled",
+        createdAt: "2024-01-02T00:00:00.000Z",
+      },
+    ];
+
+    it("returns activity logs for application", async () => {
+      (userService.getCurrentUser as ReturnType<typeof vi.fn>).mockResolvedValue({
+        user: mockUser,
+      });
+      (applicationService.getApplicationActivity as ReturnType<typeof vi.fn>).mockResolvedValue(mockActivityLogs);
+
+      const response = await app.inject({
+        method: "GET",
+        url: "/v1/applications/app-456/activity",
+        cookies: { token: "valid-token" },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body.success).toBe(true);
+      expect(body.data).toHaveLength(2);
+      expect(body.data[0].toStatus).toBe("APPLIED");
+      expect(body.data[1].toStatus).toBe("SCREENING");
+      expect(body.meta.total).toBe(2);
+    });
+
+    it("returns empty array when no activity logs", async () => {
+      (userService.getCurrentUser as ReturnType<typeof vi.fn>).mockResolvedValue({
+        user: mockUser,
+      });
+      (applicationService.getApplicationActivity as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+      const response = await app.inject({
+        method: "GET",
+        url: "/v1/applications/app-456/activity",
+        cookies: { token: "valid-token" },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body.data).toHaveLength(0);
+      expect(body.meta.total).toBe(0);
+    });
+
+    it("returns 401 without auth token", async () => {
+      const response = await app.inject({
+        method: "GET",
+        url: "/v1/applications/app-456/activity",
+      });
+
+      expect(response.statusCode).toBe(401);
+    });
+  });
+
+  describe("GET /v1/stats", () => {
+    const mockStats = {
+      totalApplications: 5,
+      byStatus: {
+        APPLIED: 2,
+        SCREENING: 1,
+        INTERVIEW: 1,
+        REJECTED: 1,
+      },
+    };
+
+    it("returns job hunt statistics", async () => {
+      (userService.getCurrentUser as ReturnType<typeof vi.fn>).mockResolvedValue({
+        user: mockUser,
+      });
+      (applicationService.getStats as ReturnType<typeof vi.fn>).mockResolvedValue(mockStats);
+
+      const response = await app.inject({
+        method: "GET",
+        url: "/v1/stats",
+        cookies: { token: "valid-token" },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body.success).toBe(true);
+      expect(body.data.totalApplications).toBe(5);
+      expect(body.data.byStatus.APPLIED).toBe(2);
+      expect(body.data.byStatus.SCREENING).toBe(1);
+    });
+
+    it("returns zero counts when no applications", async () => {
+      (userService.getCurrentUser as ReturnType<typeof vi.fn>).mockResolvedValue({
+        user: mockUser,
+      });
+      (applicationService.getStats as ReturnType<typeof vi.fn>).mockResolvedValue({
+        totalApplications: 0,
+        byStatus: {},
+      });
+
+      const response = await app.inject({
+        method: "GET",
+        url: "/v1/stats",
+        cookies: { token: "valid-token" },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body.data.totalApplications).toBe(0);
+      expect(body.data.byStatus).toEqual({});
+    });
+
+    it("returns 401 without auth token", async () => {
+      const response = await app.inject({
+        method: "GET",
+        url: "/v1/stats",
       });
 
       expect(response.statusCode).toBe(401);

@@ -6,6 +6,7 @@ import {
   CreateApplicationType,
   UpdateApplicationType,
   UpdateApplicationStatusType,
+  ActivityLogType,
 } from "../../schemas/schema";
 import {
   BadRequestError,
@@ -14,7 +15,7 @@ import {
 } from "../../utils/errors/http.errors";
 import { db } from "../../db/index";
 import { applications, activityLogs } from "../../db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql, count } from "drizzle-orm";
 import { canTransition } from "./status-machine";
 
 export class ApplicationService {
@@ -185,6 +186,52 @@ export class ApplicationService {
     await db.delete(applications).where(eq(applications.id, applicationId));
 
     return { success: true };
+  }
+
+  async getApplicationActivity(applicationId: string, userId: string): Promise<ActivityLogType[]> {
+    const application = await db.query.applications.findFirst({
+      where: eq(applications.id, applicationId),
+    });
+
+    if (!application) {
+      throw new NotFoundError("Application not found");
+    }
+
+    if (application.userId !== userId) {
+      throw new UnauthorizedError("Not authorized to view this application");
+    }
+
+    const logs = await db.query.activityLogs.findMany({
+      where: eq(activityLogs.applicationId, applicationId),
+      orderBy: (logs, { desc }) => [desc(logs.createdAt)],
+    });
+
+    return logs.map((log) => ({
+      id: log.id,
+      applicationId: log.applicationId,
+      fromStatus: log.fromStatus,
+      toStatus: log.toStatus,
+      note: log.note,
+      createdAt: log.createdAt.toISOString(),
+    }));
+  }
+
+  async getStats(userId: string) {
+    const userApplications = await db.query.applications.findMany({
+      where: eq(applications.userId, userId),
+    });
+
+    const totalApplications = userApplications.length;
+
+    const byStatus: Record<string, number> = {};
+    for (const app of userApplications) {
+      byStatus[app.status] = (byStatus[app.status] || 0) + 1;
+    }
+
+    return {
+      totalApplications,
+      byStatus,
+    };
   }
 }
 

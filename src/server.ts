@@ -5,6 +5,7 @@ import { authRoutes } from "./modules/auth/auth.routes";
 import fastifyCookie from "@fastify/cookie";
 import { authMiddleware } from "./middleware/auth.middleware";
 import { applicationRoutes } from "./modules/applications/applications.routes";
+import { statsRoutes } from "./modules/stats/stats.routes";
 const fastify = Fastify({
   logger: {
     level: "info",
@@ -27,6 +28,7 @@ fastify.register(fastifyCookie, {
 // Register routes
 fastify.register(authRoutes);
 fastify.register(applicationRoutes);
+fastify.register(statsRoutes);
 // Simple health check
 fastify.get("/health", async () => {
   return { status: "OK" };

@@ -152,6 +152,38 @@ class ApplicationController {
       }),
     );
   }
+
+  async getActivity(
+    request: FastifyRequest<{ Params: IdParams }>,
+    reply: FastifyReply,
+  ) {
+    const token = request.cookies.token;
+    if (!token) throw new UnauthorizedError("Please Authenticate");
+    const { user } = await userService.getCurrentUser(token);
+    const { id } = request.params;
+    const activity = await applicationService.getApplicationActivity(id, user.id);
+    reply.send(
+      createSuccessResponse({
+        data: activity,
+        message: "Activity logs retrieved successfully",
+        meta: { total: activity.length },
+      }),
+    );
+  }
+
+  async getStats(request: FastifyRequest, reply: FastifyReply) {
+    const token = request.cookies.token;
+    if (!token) throw new UnauthorizedError("Please Authenticate");
+    const { user } = await userService.getCurrentUser(token);
+    const stats = await applicationService.getStats(user.id);
+    reply.send(
+      createSuccessResponse({
+        data: stats,
+        message: "Statistics retrieved successfully",
+        meta: null,
+      }),
+    );
+  }
 }
 
 export const applicationController = new ApplicationController();
