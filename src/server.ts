@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import "dotenv/config";
 import { registerErrorHandler } from "./plugins/error-handler";
+import { registerRateLimit, registerStrictRateLimit } from "./plugins/rate-limit";
 import { authRoutes } from "./modules/auth/auth.routes";
 import fastifyCookie from "@fastify/cookie";
 import { authMiddleware } from "./middleware/auth.middleware";
@@ -25,6 +26,10 @@ fastify.register(fastifyCookie, {
   secret: process.env.COOKIE_SECRET as string,
   hook: "onRequest",
 });
+
+fastify.register(registerRateLimit);
+fastify.register(registerStrictRateLimit);
+
 // Register routes
 fastify.register(authRoutes);
 fastify.register(applicationRoutes);

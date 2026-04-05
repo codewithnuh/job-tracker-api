@@ -8,12 +8,12 @@ dotenv.config({ path: path.resolve(__dirname, ".env") });
 export default defineConfig({
   test: {
     globals: true,
-    sequence: {
-      concurrent: false,
-    },
     environment: "node",
     reporters: ["tree"],
-    // setupFiles: ["dotenv/config"], // You can keep or remove this now
+    testTimeout: 30000,
+    hookTimeout: 30000,
+    include: ["src/**/*.test.ts"],
+    exclude: ["dist/**", "node_modules/**"],
     coverage: {
       reporter: ["text", "lcov"],
       include: ["src/**/*.ts"],

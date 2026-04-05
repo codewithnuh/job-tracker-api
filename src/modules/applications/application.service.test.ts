@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { randomUUID } from "crypto";
 
 import { db } from "../../db/index";
-import { applications, users, activityLogs } from "../../db/schema";
+import { applications, users, activityLogs, refreshTokens } from "../../db/schema";
 import { eq } from "drizzle-orm";
 import { applicationService } from "./applications.service";
 
@@ -16,6 +16,7 @@ let testUserId: string;
 let otherUserId: string;
 
 beforeEach(async () => {
+  await db.delete(refreshTokens);
   await db.delete(activityLogs);
   await db.delete(applications);
   await db.delete(users);
@@ -44,6 +45,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  await db.delete(refreshTokens);
   await db.delete(activityLogs);
   await db.delete(applications);
   await db.delete(users);

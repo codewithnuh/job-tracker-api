@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import { userService } from "./auth.service";
 
 import { db } from "../../db";
-import { users } from "../../db/schema";
+import { users, activityLogs, refreshTokens, applications } from "../../db/schema";
 
 import { eq } from "drizzle-orm";
 
@@ -50,9 +50,19 @@ vi.mock("../../utils/redis", () => ({
 //
 
 beforeEach(async () => {
+  await db.delete(refreshTokens);
+  await db.delete(activityLogs);
+  await db.delete(applications);
   await db.delete(users);
   vi.clearAllMocks();
   blacklist.clear();
+});
+
+afterEach(async () => {
+  await db.delete(refreshTokens);
+  await db.delete(activityLogs);
+  await db.delete(applications);
+  await db.delete(users);
 });
 
 //
